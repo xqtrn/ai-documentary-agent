@@ -1,0 +1,27 @@
+import os
+
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+RUNWAY_API_KEY = os.environ["RUNWAY_API_KEY"]
+ELEVENLABS_API_KEY = os.environ["ELEVENLABS_API_KEY"]
+BEATOVEN_API_KEY = os.environ["BEATOVEN_API_KEY"]
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./output")
+CLAUDE_MODEL = "claude-sonnet-4-5-20241022"
+ELEVENLABS_VOICE = "Adam"
+ELEVENLABS_MODEL = "eleven_multilingual_v2"
+
+TARGET_DURATION_MIN = 18
+TARGET_DURATION_MAX = 22
+SCENE_DURATION_SEC = 10
+SCENES_COUNT_MIN = 120
+SCENES_COUNT_MAX = 150
+
+RUNWAY_IMAGE_MODEL = "gen4_image"
+RUNWAY_VIDEO_MODEL = "gen4_turbo"
+RUNWAY_BASE_URL = "https://api.dev.runwayml.com/v1"
+
+BEATOVEN_BASE_URL = "https://api.beatoven.ai/api/v2"
+
+MAX_RETRIES = 3
+BATCH_SIZE = 10
