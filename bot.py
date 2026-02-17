@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Telegram bot + web server launcher for AI Documentary Agent."""
 
+import asyncio
 import logging
-import multiprocessing
 import os
 import re
+import threading
 import traceback
 from pathlib import Path
 
@@ -85,26 +86,14 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"File saved at: {video_path}"
                 )
 
-        meta_path = output_path / "metadata.json"
-        if meta_path.exists():
-            await update.message.reply_document(
-                document=open(meta_path, "rb"),
-                caption="YouTube Metadata (title, description, tags)",
-            )
-
-        srt_path = output_path / "subtitles.srt"
-        if srt_path.exists():
-            await update.message.reply_document(
-                document=open(srt_path, "rb"),
-                caption="Subtitles (SRT)",
-            )
-
-        analysis_path = output_path / "analysis.md"
-        if analysis_path.exists():
-            await update.message.reply_document(
-                document=open(analysis_path, "rb"),
-                caption="Virality Analysis",
-            )
+        for fname, caption in [
+            ("metadata.json", "YouTube Metadata (title, description, tags)"),
+            ("subtitles.srt", "Subtitles (SRT)"),
+            ("analysis.md", "Virality Analysis"),
+        ]:
+            fpath = output_path / fname
+            if fpath.exists():
+                await update.message.reply_document(document=open(fpath, "rb"), caption=caption)
 
         await update.message.reply_text("All done! Files sent above.")
 
@@ -115,18 +104,18 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    import json
     output_base = Path(config.OUTPUT_DIR)
     if not output_base.exists():
         await update.message.reply_text("No outputs yet.")
         return
 
-    dirs = sorted(output_base.iterdir())
+    dirs = [d for d in sorted(output_base.iterdir()) if d.is_dir()]
     if not dirs:
         await update.message.reply_text("No outputs yet.")
         return
 
     status_lines = []
-    import json
     for d in dirs[-5:]:
         checkpoint = d / "checkpoint.json"
         if checkpoint.exists():
@@ -139,45 +128,41 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Recent outputs:\n" + "\n".join(status_lines))
 
 
-def run_bot():
-    """Run the Telegram bot (blocking)."""
+def run_bot_in_thread():
+    """Run the Telegram bot in a background thread."""
     if not config.TELEGRAM_BOT_TOKEN:
-        logger.error("TELEGRAM_BOT_TOKEN not set!")
-        import time
-        while True:
-            logger.info("Waiting for TELEGRAM_BOT_TOKEN to be configured...")
-            time.sleep(60)
+        logger.warning("TELEGRAM_BOT_TOKEN not set, bot disabled")
+        return
 
-    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("status", handle_status))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-    logger.info("Telegram bot started. Waiting for messages...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+        app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("status", handle_status))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
 
+        logger.info("Telegram bot started in background thread")
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
 
-def run_web():
-    """Run the FastAPI web server."""
-    import uvicorn
-    from web import app as web_app
-    logger.info("Starting web server on port %d...", config.WEB_PORT)
-    uvicorn.run(web_app, host="0.0.0.0", port=config.WEB_PORT, log_level="info")
+    t = threading.Thread(target=_run, daemon=True, name="telegram-bot")
+    t.start()
+    logger.info("Telegram bot thread started")
 
 
 def main():
-    # Run both bot and web server as separate processes
-    bot_proc = multiprocessing.Process(target=run_bot, name="telegram-bot")
-    web_proc = multiprocessing.Process(target=run_web, name="web-server")
+    """Start bot in thread, then run web server as main process."""
+    import uvicorn
+    from web import app as web_app
 
-    bot_proc.start()
-    web_proc.start()
+    # Start telegram bot in background
+    run_bot_in_thread()
 
-    logger.info("Both processes started: bot (pid=%d), web (pid=%d)", bot_proc.pid, web_proc.pid)
-
-    # Wait for either to exit
-    bot_proc.join()
-    web_proc.join()
+    # Run web server as main process (Railway needs this on PORT)
+    port = config.WEB_PORT
+    logger.info("Starting web server on port %d", port)
+    uvicorn.run(web_app, host="0.0.0.0", port=port, log_level="info")
 
 
 if __name__ == "__main__":
