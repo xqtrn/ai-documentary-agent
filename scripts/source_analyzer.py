@@ -3,7 +3,8 @@
 import json
 import logging
 import re
-import subprocess
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -24,16 +25,51 @@ def extract_video_id(url: str) -> str:
     raise ValueError(f"Cannot extract video ID from URL: {url}")
 
 
-def download_metadata(url: str) -> dict:
-    """Use yt-dlp to get video metadata without downloading."""
+def download_metadata(url: str, video_id: str) -> dict:
+    """Get video metadata via noembed/oembed APIs (no yt-dlp, no auth needed)."""
     logger.info("Downloading metadata for %s", url)
-    result = subprocess.run(
-        ["yt-dlp", "--dump-json", "--no-download", url],
-        capture_output=True, text=True, timeout=60,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"yt-dlp failed: {result.stderr}")
-    return json.loads(result.stdout)
+
+    metadata = {}
+
+    # Try noembed first (no rate limits, no auth)
+    try:
+        noembed_url = f"https://noembed.com/embed?url=https://www.youtube.com/watch?v={video_id}"
+        req = urllib.request.Request(noembed_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+            metadata["title"] = data.get("title", "")
+            metadata["channel"] = data.get("author_name", "")
+            metadata["thumbnail_url"] = data.get("thumbnail_url", "")
+            logger.info("Got metadata from noembed: %s", metadata["title"])
+    except Exception as e:
+        logger.warning("noembed failed: %s, trying oembed", e)
+
+    # Fallback to YouTube oembed
+    if not metadata.get("title"):
+        try:
+            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            req = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+                metadata["title"] = data.get("title", "")
+                metadata["channel"] = data.get("author_name", "")
+                metadata["thumbnail_url"] = data.get("thumbnail_url", "")
+                logger.info("Got metadata from oembed: %s", metadata["title"])
+        except Exception as e:
+            logger.warning("oembed also failed: %s", e)
+
+    # Set defaults for fields that oembed/noembed don't provide
+    metadata.setdefault("title", f"Video {video_id}")
+    metadata.setdefault("channel", "Unknown")
+    metadata.setdefault("thumbnail_url", "")
+    metadata["description"] = ""  # Not available via oembed
+    metadata["tags"] = []
+    metadata["view_count"] = 0
+    metadata["like_count"] = 0
+    metadata["duration"] = 0
+    metadata["upload_date"] = ""
+
+    return metadata
 
 
 def download_transcript(video_id: str) -> tuple[list[dict], str]:
@@ -62,7 +98,7 @@ def analyze_source(url: str, output_dir: Path) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     video_id = extract_video_id(url)
-    metadata = download_metadata(url)
+    metadata = download_metadata(url, video_id)
     segments, language = download_transcript(video_id)
     full_text = get_full_text(segments)
 
