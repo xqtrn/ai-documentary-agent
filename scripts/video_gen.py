@@ -1,12 +1,10 @@
 """Step 5: Generate video clips using Runway SDK.
 
-Falls back to generating placeholder videos using FFmpeg when Runway
-credits are exhausted or the API is unavailable.
+No placeholders — if Runway credits run out, the pipeline stops with a clear error.
 """
 
 import json
 import logging
-import subprocess
 import time
 from pathlib import Path
 
@@ -17,9 +15,6 @@ import config
 logger = logging.getLogger(__name__)
 
 MAX_PROMPT_LENGTH = 950  # Runway limit is 1000, leave buffer
-
-# Track if Runway credits are exhausted to skip remaining scenes
-_credits_exhausted = False
 
 
 def _truncate_prompt(prompt: str, max_len: int = MAX_PROMPT_LENGTH) -> str:
@@ -34,56 +29,15 @@ def _truncate_prompt(prompt: str, max_len: int = MAX_PROMPT_LENGTH) -> str:
     return truncated + "." + suffix
 
 
-def _generate_placeholder_video(scene_num: int, duration: int, output_dir: Path) -> Path:
-    """Generate a placeholder dark gradient video clip using FFmpeg."""
-    video_path = output_dir / f"scene_{scene_num:03d}.mp4"
-    # Create a dark cinematic gradient - different hue per scene
-    hue = (scene_num * 30) % 360
-    cmd = [
-        "ffmpeg", "-y",
-        "-f", "lavfi", "-i",
-        f"color=c=black:s=1280x720:d={duration}:r=24,format=yuv420p,"
-        f"drawbox=x=0:y=0:w=1280:h=720:c=0x{_scene_color(scene_num)}@0.3:t=fill",
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-        str(video_path),
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    if result.returncode != 0:
-        # Simpler fallback if drawbox fails
-        cmd2 = [
-            "ffmpeg", "-y",
-            "-f", "lavfi", "-i", f"color=c=0x111122:s=1280x720:d={duration}:r=24,format=yuv420p",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-            str(video_path),
-        ]
-        subprocess.run(cmd2, capture_output=True, text=True, timeout=30, check=True)
-
-    logger.info("Scene %d placeholder video generated: %s", scene_num, video_path)
-    return video_path
-
-
-def _scene_color(num: int) -> str:
-    """Generate a dark color hex for each scene."""
-    colors = ["1a1a2e", "16213e", "0f3460", "1a1a3e", "2d1b3d", "1b2d3d"]
-    return colors[num % len(colors)]
-
-
-def _generate_placeholder_image(scene_num: int, output_dir: Path) -> Path:
-    """Generate a placeholder dark image using FFmpeg."""
-    image_path = output_dir / f"scene_{scene_num:03d}.png"
-    cmd = [
-        "ffmpeg", "-y",
-        "-f", "lavfi", "-i", f"color=c=0x{_scene_color(scene_num)}:s=1280x720:d=1,format=rgb24",
-        "-frames:v", "1",
-        str(image_path),
-    ]
-    subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True)
-    return image_path
-
-
 def _is_credits_error(error_str: str) -> bool:
     """Check if an error is due to exhausted Runway credits."""
-    return "not have enough credits" in error_str.lower() or "insufficient credits" in error_str.lower()
+    lower = error_str.lower()
+    return any(phrase in lower for phrase in [
+        "not have enough credits",
+        "insufficient credits",
+        "credits exhausted",
+        "quota exceeded",
+    ])
 
 
 def generate_image_runway(client, prompt: str, scene_num: int, output_dir: Path) -> tuple:
@@ -159,8 +113,7 @@ def generate_video_runway(client, image_url: str, prompt: str, scene_num: int, d
 
 
 def process_scene(client, scene: dict, images_dir: Path, videos_dir: Path) -> dict:
-    """Process a single scene: generate image then video, with fallback."""
-    global _credits_exhausted
+    """Process a single scene: generate image then video via Runway."""
     num = scene["scene_number"]
     prompt = scene["visual_prompt"]
     camera = scene.get("camera", "")
@@ -170,54 +123,41 @@ def process_scene(client, scene: dict, images_dir: Path, videos_dir: Path) -> di
 
     logger.info("Processing scene %d...", num)
 
-    # If we already know credits are exhausted, skip Runway entirely
-    if _credits_exhausted:
-        logger.info("Scene %d: using placeholder (Runway credits exhausted)", num)
-        image_path = _generate_placeholder_image(num, images_dir)
-        video_path = _generate_placeholder_video(num, duration, videos_dir)
-        return {
-            "scene_number": num,
-            "image_path": str(image_path),
-            "video_path": str(video_path),
-            "duration_sec": duration,
-            "source": "placeholder",
-        }
+    last_error = None
+    for attempt in range(config.MAX_RETRIES):
+        try:
+            image_path, image_url = generate_image_runway(client, full_prompt, num, images_dir)
+            video_path = generate_video_runway(client, image_url, full_prompt, num, duration, videos_dir)
+            return {
+                "scene_number": num,
+                "image_path": str(image_path),
+                "video_path": str(video_path),
+                "duration_sec": duration,
+                "source": "runway",
+            }
+        except Exception as e:
+            last_error = str(e)
+            if _is_credits_error(last_error):
+                raise RuntimeError(
+                    f"Runway credits exhausted! Cannot generate scene {num}. "
+                    f"Please add more credits at https://dev.runwayml.com. Error: {last_error}"
+                )
+            logger.warning("Scene %d attempt %d/%d failed: %s", num, attempt + 1, config.MAX_RETRIES, last_error[:200])
+            if attempt < config.MAX_RETRIES - 1:
+                time.sleep(10 * (attempt + 1))
 
-    # Try Runway with fallback
-    try:
-        image_path, image_url = generate_image_runway(client, full_prompt, num, images_dir)
-        video_path = generate_video_runway(client, image_url, full_prompt, num, duration, videos_dir)
-        return {
-            "scene_number": num,
-            "image_path": str(image_path),
-            "video_path": str(video_path),
-            "duration_sec": duration,
-            "source": "runway",
-        }
-    except Exception as e:
-        error_str = str(e)
-        if _is_credits_error(error_str):
-            _credits_exhausted = True
-            logger.warning("Runway credits exhausted, switching to placeholder videos for all remaining scenes")
-        else:
-            logger.warning("Runway failed for scene %d: %s, using placeholder", num, error_str[:150])
-
-        image_path = _generate_placeholder_image(num, images_dir)
-        video_path = _generate_placeholder_video(num, duration, videos_dir)
-        return {
-            "scene_number": num,
-            "image_path": str(image_path),
-            "video_path": str(video_path),
-            "duration_sec": duration,
-            "source": "placeholder",
-        }
+    # All retries exhausted for this scene
+    logger.error("Scene %d failed after %d attempts: %s", num, config.MAX_RETRIES, last_error)
+    return {
+        "scene_number": num,
+        "duration_sec": duration,
+        "error": last_error,
+        "source": "failed",
+    }
 
 
 def generate_videos(scenes_data: dict, output_dir: Path) -> dict:
-    """Generate all scene videos sequentially."""
-    global _credits_exhausted
-    _credits_exhausted = False
-
+    """Generate all scene videos using Runway."""
     images_dir = output_dir / "images"
     videos_dir = output_dir / "videos"
     images_dir.mkdir(parents=True, exist_ok=True)
@@ -226,34 +166,29 @@ def generate_videos(scenes_data: dict, output_dir: Path) -> dict:
     scenes = scenes_data["scenes"]
     results = []
 
-    # Try to initialize Runway client
-    client = None
-    try:
-        import runwayml
-        client = runwayml.RunwayML(api_key=config.RUNWAY_API_KEY)
-    except Exception as e:
-        logger.warning("Could not initialize Runway client: %s, using placeholders", e)
-        _credits_exhausted = True
+    # Initialize Runway client — fail early if SDK missing or key invalid
+    import runwayml
+    client = runwayml.RunwayML(api_key=config.RUNWAY_API_KEY)
+    logger.info("Runway client initialized, processing %d scenes...", len(scenes))
 
     for scene in scenes:
         result = process_scene(client, scene, images_dir, videos_dir)
         results.append(result)
 
-    runway_count = sum(1 for r in results if r.get("source") == "runway")
-    placeholder_count = sum(1 for r in results if r.get("source") == "placeholder")
+    successful = [r for r in results if r.get("source") == "runway"]
+    failed = [r for r in results if "error" in r]
 
     result = {
         "generated_scenes": results,
         "total_scenes": len(scenes),
-        "successful": len(results),  # All scenes now succeed (with fallback)
-        "failed": 0,
-        "runway_scenes": runway_count,
-        "placeholder_scenes": placeholder_count,
+        "successful": len(successful),
+        "failed": len(failed),
+        "runway_scenes": len(successful),
     }
 
     with open(output_dir / "step5_videos.json", "w") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    logger.info("Video generation complete: %d total (%d Runway, %d placeholder)",
-                len(results), runway_count, placeholder_count)
+    logger.info("Video generation complete: %d/%d successful (%d failed)",
+                len(successful), len(scenes), len(failed))
     return result
