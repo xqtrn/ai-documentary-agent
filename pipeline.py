@@ -203,6 +203,8 @@ def run_pipeline(url: str, start_from: str | None = None):
         # Step 5
         if start_idx <= 4:
             video_data = run_step(4, "video", generate_videos, scenes_data, output_dir)
+            if video_data.get("successful", 0) == 0:
+                raise RuntimeError(f"Video generation failed: 0/{video_data.get('total_scenes', 0)} scenes succeeded")
         else:
             video_data = load_step_data(output_dir, "step5_videos.json")
 

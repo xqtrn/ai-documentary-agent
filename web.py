@@ -171,6 +171,7 @@ async def api_generate(request: Request):
 
     body = await request.json()
     url = body.get("url", "").strip()
+    start_from = body.get("start_from", None)
     if not url:
         raise HTTPException(400, "Missing URL")
 
@@ -178,9 +179,35 @@ async def api_generate(request: Request):
     if status.get("state") == "running":
         raise HTTPException(409, "Pipeline already running")
 
+    # Auto-detect and fix failed video checkpoints
+    from pipeline import get_output_dir
+    out_dir = get_output_dir(url)
+    checkpoint_file = out_dir / "checkpoint.json"
+    if checkpoint_file.exists():
+        cp_data = json.loads(checkpoint_file.read_text())
+        last = cp_data.get("last_step", "")
+        
+        # If last step was "video", check if it actually succeeded
+        if last == "video":
+            step5_file = out_dir / "step5_videos.json"
+            if step5_file.exists():
+                step5 = json.loads(step5_file.read_text())
+                if step5.get("successful", 0) == 0:
+                    logger.info("Auto-resetting: video step had 0 successes, resetting to scenes")
+                    # Reset to after scenes so step 5 re-runs
+                    checkpoint_file.write_text(json.dumps({"last_step": "scenes"}))
+                    step5_file.unlink(missing_ok=True)
+        
+        # If last step was "audio" and we had an error, reset to after video
+        if last == "audio":
+            step6_file = out_dir / "step6_audio.json"
+            if not step6_file.exists():
+                logger.info("Auto-resetting: audio step incomplete, resetting to video")
+                checkpoint_file.write_text(json.dumps({"last_step": "video"}))
+
     def _run():
         try:
-            run_pipeline(url)
+            run_pipeline(url, start_from=start_from)
         except Exception as e:
             logger.exception("Pipeline thread failed: %s", e)
 
