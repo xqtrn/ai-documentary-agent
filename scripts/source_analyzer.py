@@ -24,11 +24,10 @@ def extract_video_id(url: str) -> str:
 
 
 def download_metadata(video_id: str) -> dict:
-    """Get video metadata via noembed/oembed APIs (no yt-dlp, no auth needed)."""
+    """Get video metadata via noembed/oembed APIs."""
     logger.info("Downloading metadata via noembed/oembed for %s", video_id)
     metadata = {}
 
-    # Try noembed first
     for api_name, api_url in [
         ("noembed", f"https://noembed.com/embed?url=https://www.youtube.com/watch?v={video_id}"),
         ("oembed", f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"),
@@ -46,7 +45,6 @@ def download_metadata(video_id: str) -> dict:
         except Exception as e:
             logger.warning("%s failed: %s", api_name, e)
 
-    # Defaults
     metadata.setdefault("title", f"Video {video_id}")
     metadata.setdefault("channel", "Unknown")
     metadata.setdefault("thumbnail_url", f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg")
@@ -59,64 +57,55 @@ def download_metadata(video_id: str) -> dict:
     return metadata
 
 
+def _try_fetch_transcript(video_id: str, use_proxy: bool = False):
+    """Attempt to fetch transcript, optionally via Tor SOCKS5 proxy."""
+    from youtube_transcript_api import YouTubeTranscriptApi
+    import requests
+
+    if use_proxy:
+        logger.info("Trying transcript download via Tor proxy...")
+        session = requests.Session()
+        session.proxies = {
+            "http": "socks5h://127.0.0.1:9050",
+            "https": "socks5h://127.0.0.1:9050",
+        }
+        ytt = YouTubeTranscriptApi(session=session)
+    else:
+        logger.info("Trying transcript download (direct)...")
+        ytt = YouTubeTranscriptApi()
+
+    snippets = ytt.fetch(video_id)
+    segments = [{"text": s.text, "start": s.start, "duration": s.duration} for s in snippets]
+    return segments
+
+
 def download_transcript(video_id: str) -> tuple[list[dict], str]:
-    """Download transcript using youtube-transcript-api v1.x API."""
+    """Download transcript with Tor proxy fallback."""
     logger.info("Downloading transcript for %s", video_id)
 
+    # Try direct first
     try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-    except ImportError:
-        raise RuntimeError("youtube-transcript-api not installed. Run: pip install youtube-transcript-api")
-
-    # v1.x API: instantiate, then call .fetch() or .list()
-    ytt = YouTubeTranscriptApi()
-
-    # Try fetching transcript
-    try:
-        # First try to list available transcripts and pick best one
-        transcript_list = ytt.list(video_id)
-        
-        # Try manually created English first
-        best = None
-        for t in transcript_list:
-            if t.language_code == "en" and not t.is_generated:
-                best = t
-                break
-        # Then any manual transcript
-        if not best:
-            for t in transcript_list:
-                if not t.is_generated:
-                    best = t
-                    break
-        # Then auto-generated English
-        if not best:
-            for t in transcript_list:
-                if t.language_code == "en":
-                    best = t
-                    break
-        # Then any transcript
-        if not best and transcript_list:
-            best = transcript_list[0]
-
-        if best:
-            snippets = best.fetch()
-            segments = [{"text": s.text, "start": s.start, "duration": s.duration} for s in snippets]
-            return segments, best.language_code
-
-    except Exception as e:
-        logger.warning("list/fetch approach failed: %s, trying direct fetch", e)
-
-    # Fallback: direct fetch
-    try:
-        snippets = ytt.fetch(video_id)
-        segments = [{"text": s.text, "start": s.start, "duration": s.duration} for s in snippets]
+        segments = _try_fetch_transcript(video_id, use_proxy=False)
+        logger.info("Direct fetch succeeded: %d segments", len(segments))
         return segments, "en"
-    except Exception as e2:
-        raise RuntimeError(
-            f"Failed to download transcript for {video_id}: {e2}\n"
-            "This usually means YouTube is blocking requests from this server's IP. "
-            "The video might not have subtitles, or you may need to use a proxy."
-        )
+    except Exception as e:
+        logger.warning("Direct fetch failed: %s", str(e)[:200])
+
+    # Try via Tor proxy
+    try:
+        segments = _try_fetch_transcript(video_id, use_proxy=True)
+        logger.info("Tor proxy fetch succeeded: %d segments", len(segments))
+        return segments, "en"
+    except Exception as e:
+        logger.warning("Tor proxy fetch also failed: %s", str(e)[:200])
+
+    raise RuntimeError(
+        f"Failed to download transcript for {video_id}. "
+        "Both direct and Tor proxy attempts were blocked by YouTube. "
+        "Please try: (1) Wait a few minutes and retry, "
+        "(2) Use a different video, or "
+        "(3) Add a residential proxy via PROXY_URL environment variable."
+    )
 
 
 def get_full_text(segments: list[dict]) -> str:
@@ -150,7 +139,6 @@ def analyze_source(url: str, output_dir: Path) -> dict:
         "transcript_text": full_text,
     }
 
-    # Save checkpoint
     with open(output_dir / "step1_source.json", "w") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 

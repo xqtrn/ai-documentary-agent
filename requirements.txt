@@ -6,3 +6,5 @@ ffmpeg-python>=0.2.0
 fastapi>=0.115.0
 uvicorn>=0.32.0
 python-jose[cryptography]>=3.3.0
+requests>=2.31.0
+pysocks>=1.7.1
