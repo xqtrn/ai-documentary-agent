@@ -20,9 +20,8 @@ def _truncate_prompt(prompt: str, max_len: int = MAX_PROMPT_LENGTH) -> str:
     suffix = " no text, no letters, no words, no subtitles, no signs, no writing, no numbers, no captions"
     if len(prompt) <= max_len:
         return prompt
-    # Reserve space for suffix
     available = max_len - len(suffix) - 2
-    truncated = prompt[:available].rsplit(".", 1)[0]  # Cut at last sentence
+    truncated = prompt[:available].rsplit(".", 1)[0]
     if not truncated:
         truncated = prompt[:available]
     return truncated + "." + suffix
@@ -46,7 +45,14 @@ def generate_image(client: runwayml.RunwayML, prompt: str, scene_num: int, outpu
             task_id = task.id
             logger.info("Scene %d image task created: %s", scene_num, task_id)
 
-            result = poll_task(client, task_id, timeout=300)
+            # Use SDK's built-in polling with wait_for_task_output
+            try:
+                result = task.wait_for_task_output()
+            except runwayml.TaskFailedError as e:
+                raise RuntimeError(f"Runway image task failed: {e}")
+            except runwayml.TaskTimeoutError:
+                raise TimeoutError(f"Runway image task {task_id} timed out")
+
             image_url = result.output[0]
 
             image_path = output_dir / f"scene_{scene_num:03d}.png"
@@ -83,7 +89,14 @@ def generate_video(client: runwayml.RunwayML, image_url: str, prompt: str, scene
             task_id = task.id
             logger.info("Scene %d video task created: %s", scene_num, task_id)
 
-            result = poll_task(client, task_id, timeout=600)
+            # Use SDK's built-in polling
+            try:
+                result = task.wait_for_task_output()
+            except runwayml.TaskFailedError as e:
+                raise RuntimeError(f"Runway video task failed: {e}")
+            except runwayml.TaskTimeoutError:
+                raise TimeoutError(f"Runway video task {task_id} timed out")
+
             video_url = result.output[0]
 
             video_path = output_dir / f"scene_{scene_num:03d}.mp4"
@@ -100,31 +113,12 @@ def generate_video(client: runwayml.RunwayML, image_url: str, prompt: str, scene
             time.sleep(10 * (attempt + 1))
 
 
-def poll_task(client: runwayml.RunwayML, task_id: str, timeout: int = 300):
-    """Poll Runway task until completion."""
-    start = time.time()
-    while time.time() - start < timeout:
-        task = client.tasks.retrieve(task_id)
-        status = task.status
-
-        if status == "SUCCEEDED":
-            return task
-        elif status in ("FAILED", "CANCELLED"):
-            error = getattr(task, 'failure', None) or getattr(task, 'error', 'unknown')
-            raise RuntimeError(f"Runway task {task_id} {status}: {error}")
-
-        time.sleep(5)
-
-    raise TimeoutError(f"Runway task {task_id} timed out after {timeout}s")
-
-
 def process_scene(client: runwayml.RunwayML, scene: dict, images_dir: Path, videos_dir: Path) -> dict:
     """Process a single scene: generate image then video."""
     num = scene["scene_number"]
     prompt = scene["visual_prompt"]
     camera = scene.get("camera", "")
     lighting = scene.get("lighting", "")
-    # Keep prompt concise for Runway's 1000 char limit
     full_prompt = f"{prompt}. Camera: {camera}. Lighting: {lighting}"
     duration = scene.get("duration_sec", 10)
 

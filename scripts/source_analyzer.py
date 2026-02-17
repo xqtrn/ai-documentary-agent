@@ -259,6 +259,36 @@ def _check_user_transcript(video_id: str, output_dir: Path) -> list[dict] | None
     return segments
 
 
+def _check_bundled_transcript(video_id: str) -> list[dict] | None:
+    """Method 5: Check for transcripts bundled in the repo's transcripts/ directory."""
+    try:
+        # Check local bundled transcripts directory
+        bundled_json = Path(__file__).parent.parent / "transcripts" / f"{video_id}.json"
+        if bundled_json.exists():
+            logger.info("Found bundled transcript: %s", bundled_json)
+            segments = json.loads(bundled_json.read_text())
+            logger.info("Bundled transcript loaded: %d segments", len(segments))
+            return segments
+
+        bundled_txt = Path(__file__).parent.parent / "transcripts" / f"{video_id}.txt"
+        if bundled_txt.exists():
+            logger.info("Found bundled transcript text: %s", bundled_txt)
+            text = bundled_txt.read_text(encoding="utf-8", errors="replace").strip()
+            segments = []
+            t = 0.0
+            for line in text.split("\n"):
+                line = line.strip()
+                if line:
+                    dur = max(2.0, len(line) / 15)
+                    segments.append({"text": line, "start": round(t, 2), "duration": round(dur, 2)})
+                    t += dur
+            logger.info("Bundled text transcript loaded: %d segments", len(segments))
+            return segments
+    except Exception as e:
+        logger.warning("Bundled transcript check failed: %s", e)
+    return None
+
+
 def _parse_vtt(vtt_text: str) -> list[dict]:
     """Parse WebVTT subtitle format."""
     segments = []
@@ -352,6 +382,12 @@ def download_transcript(video_id: str, output_dir: Path) -> tuple[list[dict], st
     result = _check_user_transcript(video_id, output_dir)
     if result:
         return result, "en"
+
+    # Method 5: Bundled transcript in repo
+    result = _check_bundled_transcript(video_id)
+    if result:
+        return result, "en"
+    errors.append("Bundled transcript: not found for this video")
 
     # All methods failed
     error_details = "\n".join(f"  - {e}" for e in errors)

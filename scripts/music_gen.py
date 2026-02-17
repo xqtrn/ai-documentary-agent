@@ -1,7 +1,12 @@
-"""Step 7: Generate background music using Beatoven.ai API."""
+"""Step 7: Generate background music using Beatoven.ai API.
+
+Falls back to generating a silent audio track if Beatoven is unavailable,
+so the pipeline can continue without background music.
+"""
 
 import json
 import logging
+import subprocess
 import time
 from pathlib import Path
 
@@ -21,69 +26,63 @@ def get_headers():
     }
 
 
-def generate_music(duration_sec: int, output_dir: Path) -> dict:
-    """Generate cinematic documentary background music."""
-    logger.info("Generating background music (%ds)...", duration_sec)
+def _generate_silent_audio(duration_sec: int, output_path: Path) -> Path:
+    """Generate a silent MP3 file as fallback when music API is unavailable."""
+    logger.info("Generating silent audio fallback (%ds)...", duration_sec)
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo",
+        "-t", str(duration_sec),
+        "-c:a", "libmp3lame", "-b:a", "128k",
+        str(output_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    if result.returncode != 0:
+        raise RuntimeError(f"FFmpeg silent audio failed: {result.stderr}")
+    logger.info("Silent audio fallback saved: %s", output_path)
+    return output_path
 
-    music_dir = output_dir / "audio"
-    music_dir.mkdir(parents=True, exist_ok=True)
 
-    # Step 1: Create a composition
-    for attempt in range(config.MAX_RETRIES):
-        try:
-            resp = httpx.post(
-                f"{BASE_URL}/tracks",
-                headers=get_headers(),
-                json={
-                    "title": "Documentary Background",
-                    "genre": "cinematic",
-                    "mood": "dramatic",
-                    "tempo": "medium",
-                    "duration": duration_sec,
-                    "instruments": ["orchestra", "piano", "strings"],
-                },
-                timeout=60,
-            )
-            resp.raise_for_status()
-            track = resp.json()
-            track_id = track.get("id") or track.get("track_id")
-            logger.info("Beatoven track created: %s", track_id)
-            break
-        except Exception as e:
-            logger.warning("Beatoven create attempt %d/%d failed: %s", attempt + 1, config.MAX_RETRIES, e)
-            if attempt == config.MAX_RETRIES - 1:
-                raise
-            time.sleep(5 * (attempt + 1))
+def _try_beatoven(duration_sec: int, music_path: Path) -> bool:
+    """Try to generate music via Beatoven API. Returns True on success."""
+    try:
+        # Step 1: Create a composition
+        resp = httpx.post(
+            f"{BASE_URL}/tracks",
+            headers=get_headers(),
+            json={
+                "title": "Documentary Background",
+                "genre": "cinematic",
+                "mood": "dramatic",
+                "tempo": "medium",
+                "duration": duration_sec,
+                "instruments": ["orchestra", "piano", "strings"],
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        track = resp.json()
+        track_id = track.get("id") or track.get("track_id")
+        logger.info("Beatoven track created: %s", track_id)
 
-    # Step 2: Start composition/render
-    for attempt in range(config.MAX_RETRIES):
-        try:
-            resp = httpx.post(
-                f"{BASE_URL}/tracks/{track_id}/compose",
-                headers=get_headers(),
-                json={"format": "mp3"},
-                timeout=60,
-            )
-            resp.raise_for_status()
-            task = resp.json()
-            task_id = task.get("id") or task.get("task_id") or track_id
-            logger.info("Beatoven composition started: %s", task_id)
-            break
-        except Exception as e:
-            logger.warning("Beatoven compose attempt %d/%d failed: %s", attempt + 1, config.MAX_RETRIES, e)
-            if attempt == config.MAX_RETRIES - 1:
-                raise
-            time.sleep(5 * (attempt + 1))
+        # Step 2: Start composition/render
+        resp = httpx.post(
+            f"{BASE_URL}/tracks/{track_id}/compose",
+            headers=get_headers(),
+            json={"format": "mp3"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        task = resp.json()
+        task_id = task.get("id") or task.get("task_id") or track_id
+        logger.info("Beatoven composition started: %s", task_id)
 
-    # Step 3: Poll until done
-    music_path = music_dir / "background_music.mp3"
-    max_polls = 120
-    for i in range(max_polls):
-        try:
+        # Step 3: Poll until done
+        for i in range(120):
             resp = httpx.get(
                 f"{BASE_URL}/tracks/{track_id}/status",
                 headers=get_headers(),
-                timeout=30,
+                timeout=15,
             )
             resp.raise_for_status()
             status = resp.json()
@@ -96,21 +95,40 @@ def generate_music(duration_sec: int, output_dir: Path) -> dict:
                     dl_resp.raise_for_status()
                     music_path.write_bytes(dl_resp.content)
                     logger.info("Background music saved: %s", music_path)
-                    break
+                    return True
             elif state in ("failed", "error"):
-                raise RuntimeError(f"Beatoven composition failed: {status}")
+                logger.error("Beatoven composition failed: %s", status)
+                return False
 
-        except httpx.HTTPStatusError:
-            pass  # May not be ready yet
+            time.sleep(5)
 
-        time.sleep(5)
-    else:
-        raise TimeoutError("Beatoven composition timed out")
+        logger.error("Beatoven composition timed out")
+        return False
+
+    except Exception as e:
+        logger.warning("Beatoven API failed: %s", e)
+        return False
+
+
+def generate_music(duration_sec: int, output_dir: Path) -> dict:
+    """Generate cinematic documentary background music with fallback."""
+    logger.info("Generating background music (%ds)...", duration_sec)
+
+    music_dir = output_dir / "audio"
+    music_dir.mkdir(parents=True, exist_ok=True)
+    music_path = music_dir / "background_music.mp3"
+
+    # Try Beatoven first
+    success = _try_beatoven(duration_sec, music_path)
+
+    if not success:
+        logger.warning("Beatoven unavailable, using silent audio fallback")
+        _generate_silent_audio(duration_sec, music_path)
 
     result = {
         "music_path": str(music_path),
         "duration_sec": duration_sec,
-        "track_id": track_id,
+        "source": "beatoven" if success else "silent_fallback",
     }
 
     with open(output_dir / "step7_music.json", "w") as f:
