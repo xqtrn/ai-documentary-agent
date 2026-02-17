@@ -128,6 +128,23 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Recent outputs:\n" + "\n".join(status_lines))
 
 
+async def _run_bot_async():
+    """Run bot using low-level async API (no signal handlers)."""
+    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("status", handle_status))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Telegram bot polling started")
+
+    # Keep running forever
+    stop_event = asyncio.Event()
+    await stop_event.wait()
+
+
 def run_bot_in_thread():
     """Run the Telegram bot in a background thread."""
     if not config.TELEGRAM_BOT_TOKEN:
@@ -137,14 +154,10 @@ def run_bot_in_thread():
     def _run():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-
-        app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("status", handle_status))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
-
-        logger.info("Telegram bot started in background thread")
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+        try:
+            loop.run_until_complete(_run_bot_async())
+        except Exception:
+            logger.exception("Bot thread crashed")
 
     t = threading.Thread(target=_run, daemon=True, name="telegram-bot")
     t.start()
