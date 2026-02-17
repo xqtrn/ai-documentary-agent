@@ -116,7 +116,7 @@ def get_output_dir(url: str) -> Path:
     return output_dir
 
 
-def get_checkpoint(output_dir: Path) -> str | None:
+def get_checkpoint(output_dir: Path):
     checkpoint_file = output_dir / "checkpoint.json"
     if checkpoint_file.exists():
         data = json.loads(checkpoint_file.read_text())
@@ -147,7 +147,7 @@ def _check_cancel():
         raise InterruptedError("Pipeline cancelled by user")
 
 
-def run_pipeline(url: str, start_from: str | None = None):
+def run_pipeline(url: str, start_from: str = None):
     """Run the full pipeline."""
     _pipeline_cancel.clear()
     _log_buffer.clear()

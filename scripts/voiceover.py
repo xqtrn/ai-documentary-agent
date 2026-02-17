@@ -38,10 +38,13 @@ def get_voice_id(voice_name: str) -> str:
     logger.info("Available voices: %s", ", ".join(voice_names))
     
     for v in voices:
-        if v["name"].lower() == voice_name.lower():
-            logger.info("Found voice '%s': %s", voice_name, v["voice_id"])
+        name = v["name"].lower()
+        target = voice_name.lower()
+        # Match exact name, or name prefix (e.g., "George" matches "George - Warm, Captivating Storyteller")
+        if name == target or name.startswith(target + " ") or name.startswith(target + " -"):
+            logger.info("Found voice '%s': %s (ID: %s)", voice_name, v["name"], v["voice_id"])
             return v["voice_id"]
-    
+
     # Fallback to first available
     logger.warning("Voice '%s' not found, using '%s'", voice_name, voices[0]["name"])
     return voices[0]["voice_id"]

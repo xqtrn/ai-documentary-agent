@@ -117,7 +117,7 @@ def assemble_video(
     return assembly_result
 
 
-def _concat_with_crossfade(video_paths: list[str], output: str, crossfade_sec: float):
+def _concat_with_crossfade(video_paths: list, output: str, crossfade_sec: float):
     """Concatenate videos with crossfade transitions."""
     # For many clips, use simple concat (crossfade filter graph gets too complex)
     if len(video_paths) > 20:
@@ -163,7 +163,7 @@ def _concat_with_crossfade(video_paths: list[str], output: str, crossfade_sec: f
     subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=True)
 
 
-def _simple_concat(video_paths: list[str], output: str):
+def _simple_concat(video_paths: list, output: str):
     """Simple concatenation without crossfade for large numbers of clips."""
     import tempfile
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:

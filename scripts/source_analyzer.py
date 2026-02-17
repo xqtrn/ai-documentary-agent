@@ -77,7 +77,7 @@ def download_metadata(video_id: str) -> dict:
     return metadata
 
 
-def _try_youtube_transcript_api(video_id: str) -> list[dict] | None:
+def _try_youtube_transcript_api(video_id: str):
     """Method 1: youtube-transcript-api (only works on non-cloud IPs)."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
@@ -92,7 +92,7 @@ def _try_youtube_transcript_api(video_id: str) -> list[dict] | None:
         return None
 
 
-def _try_youtube_transcript_api_tor(video_id: str) -> list[dict] | None:
+def _try_youtube_transcript_api_tor(video_id: str):
     """Method 1b: youtube-transcript-api via Tor SOCKS5 proxy."""
     try:
         import requests
@@ -113,7 +113,7 @@ def _try_youtube_transcript_api_tor(video_id: str) -> list[dict] | None:
         return None
 
 
-def _try_invidious(video_id: str) -> list[dict] | None:
+def _try_invidious(video_id: str):
     """Method 2: Try Invidious public instances."""
     for instance in INVIDIOUS_INSTANCES:
         try:
@@ -169,7 +169,7 @@ def _try_invidious(video_id: str) -> list[dict] | None:
     return None
 
 
-def _try_scrape_youtube_page(video_id: str) -> list[dict] | None:
+def _try_scrape_youtube_page(video_id: str):
     """Method 3: Scrape YouTube page for timedtext URLs and fetch XML captions."""
     try:
         import http.cookiejar
@@ -232,7 +232,7 @@ def _try_scrape_youtube_page(video_id: str) -> list[dict] | None:
         return None
 
 
-def _check_user_transcript(video_id: str, output_dir: Path) -> list[dict] | None:
+def _check_user_transcript(video_id: str, output_dir: Path):
     """Method 4: Check if user pasted/uploaded transcript via web UI."""
     # Check for user-provided transcript file
     user_file = output_dir / "user_transcript.txt"
@@ -259,7 +259,7 @@ def _check_user_transcript(video_id: str, output_dir: Path) -> list[dict] | None
     return segments
 
 
-def _check_bundled_transcript(video_id: str) -> list[dict] | None:
+def _check_bundled_transcript(video_id: str):
     """Method 5: Check for transcripts bundled in the repo's transcripts/ directory."""
     try:
         # Check local bundled transcripts directory
@@ -289,7 +289,7 @@ def _check_bundled_transcript(video_id: str) -> list[dict] | None:
     return None
 
 
-def _parse_vtt(vtt_text: str) -> list[dict]:
+def _parse_vtt(vtt_text: str):
     """Parse WebVTT subtitle format."""
     segments = []
     lines = vtt_text.split("\n")
@@ -313,7 +313,7 @@ def _parse_vtt(vtt_text: str) -> list[dict]:
     return segments
 
 
-def _parse_caption_xml(xml_text: str) -> list[dict]:
+def _parse_caption_xml(xml_text: str):
     """Parse YouTube caption XML format."""
     try:
         root = ElementTree.fromstring(xml_text)
@@ -340,7 +340,7 @@ def _parse_timestamp(ts: str) -> float:
     return 0.0
 
 
-def get_full_text(segments: list[dict]) -> str:
+def get_full_text(segments: list) -> str:
     return " ".join(s["text"] for s in segments)
 
 
@@ -348,7 +348,7 @@ def get_full_text(segments: list[dict]) -> str:
 import config
 
 
-def download_transcript(video_id: str, output_dir: Path) -> tuple[list[dict], str]:
+def download_transcript(video_id: str, output_dir: Path):
     """Download transcript using multiple fallback methods."""
     logger.info("Downloading transcript for %s (trying multiple methods)", video_id)
 

@@ -31,7 +31,7 @@ DATA_DIR = Path(config.DATA_DIR)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 ADMIN_FILE = DATA_DIR / "admin.json"
 
-_pipeline_thread: threading.Thread | None = None
+_pipeline_thread: threading.Thread = None
 
 
 # --- Auth helpers ---
@@ -47,7 +47,7 @@ def verify_telegram_auth(data: dict) -> bool:
     return hmac.compare_digest(computed, check_hash)
 
 
-def get_admin_id() -> int | None:
+def get_admin_id():
     if ADMIN_FILE.exists():
         try:
             return json.loads(ADMIN_FILE.read_text()).get("telegram_id")
@@ -66,7 +66,7 @@ def create_session_token(telegram_id: int, username: str = "") -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(request: Request) -> dict | None:
+def get_current_user(request: Request):
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None
