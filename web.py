@@ -48,6 +48,10 @@ def verify_telegram_auth(data: dict) -> bool:
 
 
 def get_admin_id():
+    # Check env var first (takes priority)
+    env_admin = os.environ.get("ADMIN_TELEGRAM_ID", "")
+    if env_admin:
+        return int(env_admin)
     if ADMIN_FILE.exists():
         try:
             return json.loads(ADMIN_FILE.read_text()).get("telegram_id")
