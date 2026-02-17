@@ -16,10 +16,7 @@ Analyze this YouTube video transcript and metadata to understand WHY it became p
 
 VIDEO METADATA:
 - Title: {title}
-- Views: {view_count:,}
-- Likes: {like_count:,}
 - Channel: {channel}
-- Duration: {duration}s
 - Language: {language}
 
 TRANSCRIPT:
@@ -60,35 +57,47 @@ Provide a detailed analysis in the following structure:
 - Top 5 elements to fix/add
 - Recommended narrative approach for the rewrite
 
-Be specific with timestamps and quotes from the transcript."""
+Be specific with quotes from the transcript."""
 
 
 def analyze_virality(source_data: dict, output_dir: Path) -> dict:
     """Analyze why the video went viral."""
     logger.info("Analyzing virality for: %s", source_data["title"])
 
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    # Check API key early with clear error
+    api_key = config.check_api_key("ANTHROPIC_API_KEY")
 
-    # Truncate transcript if too long (keep under 100k chars for context)
+    client = anthropic.Anthropic(api_key=api_key)
+
+    # Truncate transcript if too long
     transcript = source_data["transcript_text"]
     if len(transcript) > 80000:
         transcript = transcript[:80000] + "\n\n[TRANSCRIPT TRUNCATED]"
 
     prompt = ANALYSIS_PROMPT.format(
         title=source_data["title"],
-        view_count=source_data.get("view_count", 0),
-        like_count=source_data.get("like_count", 0),
         channel=source_data.get("channel", "Unknown"),
-        duration=source_data.get("duration", 0),
         language=source_data.get("language", "unknown"),
         transcript=transcript,
     )
 
-    response = client.messages.create(
-        model=config.CLAUDE_MODEL,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        response = client.messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.AuthenticationError:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is invalid or has no credits! "
+            "Please check your key at https://console.anthropic.com/settings/keys "
+            "and add billing at https://console.anthropic.com/settings/billing"
+        )
+    except anthropic.RateLimitError:
+        raise RuntimeError(
+            "Anthropic API rate limit reached. Please wait a moment and try again, "
+            "or check your billing at https://console.anthropic.com/settings/billing"
+        )
 
     analysis_text = response.content[0].text
 
@@ -105,10 +114,13 @@ def analyze_virality(source_data: dict, output_dir: Path) -> dict:
 
     with open(output_dir / "analysis.md", "w") as f:
         f.write(f"# Virality Analysis: {source_data['title']}\n\n")
-        f.write(f"**Original URL:** {source_data['url']}\n")
-        f.write(f"**Views:** {source_data.get('view_count', 0):,}\n")
-        f.write(f"**Duration:** {source_data.get('duration', 0)}s\n\n")
+        f.write(f"**Original URL:** {source_data['url']}\n\n")
         f.write(analysis_text)
 
-    logger.info("Virality analysis complete (%d tokens used)", response.usage.input_tokens + response.usage.output_tokens)
+    logger.info(
+        "Virality analysis complete (%d input + %d output = %d tokens)",
+        response.usage.input_tokens,
+        response.usage.output_tokens,
+        response.usage.input_tokens + response.usage.output_tokens,
+    )
     return result
