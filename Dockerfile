@@ -23,3 +23,5 @@ RUN mkdir -p /app/output /app/data
 EXPOSE 8080
 
 CMD ["python", "bot.py"]
+
+# rebuild-1771295695
