@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Documentary Agent")
 
-SECRET_KEY = hashlib.sha256(config.TELEGRAM_BOT_TOKEN.encode()).hexdigest()
+SECRET_KEY = hashlib.sha256(config.TELEGRAM_BOT_TOKEN.encode()).hexdigest() if config.TELEGRAM_BOT_TOKEN else "dev-secret"
 ALGORITHM = "HS256"
 COOKIE_NAME = "session"
 DATA_DIR = Path(config.DATA_DIR)
@@ -36,7 +37,6 @@ _pipeline_thread: threading.Thread | None = None
 # --- Auth helpers ---
 
 def verify_telegram_auth(data: dict) -> bool:
-    """Verify Telegram Login Widget data using HMAC-SHA256."""
     check_hash = data.pop("hash", None)
     if not check_hash:
         return False
@@ -135,6 +135,33 @@ async def api_status(request: Request):
     return JSONResponse(read_status())
 
 
+@app.post("/api/transcript")
+async def api_save_transcript(request: Request):
+    """Save user-pasted transcript for a video."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401)
+    body = await request.json()
+    text = body.get("transcript", "").strip()
+    url = body.get("url", "").strip()
+    if not text:
+        raise HTTPException(400, "No transcript text provided")
+    if not url:
+        raise HTTPException(400, "No URL provided")
+
+    match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
+    video_id = match.group(1) if match else "unknown"
+
+    out_dir = Path(config.OUTPUT_DIR) / video_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    transcript_file = out_dir / "user_transcript.txt"
+    transcript_file.write_text(text, encoding="utf-8")
+
+    logger.info("User transcript saved: %s (%d chars)", video_id, len(text))
+    return JSONResponse({"ok": True, "message": f"Transcript saved ({len(text)} chars)"})
+
+
 @app.post("/api/generate")
 async def api_generate(request: Request):
     global _pipeline_thread
@@ -187,9 +214,7 @@ async def api_outputs(request: Request):
             for fname in ["final_video.mp4", "thumbnail.png", "metadata.json", "subtitles.srt", "analysis.md"]:
                 fpath = d / fname
                 if fpath.exists():
-                    entry["files"][fname] = {
-                        "size_mb": round(fpath.stat().st_size / 1048576, 1)
-                    }
+                    entry["files"][fname] = {"size_mb": round(fpath.stat().st_size / 1048576, 1)}
             checkpoint = d / "checkpoint.json"
             if checkpoint.exists():
                 try:
@@ -206,7 +231,6 @@ async def download_file(video_id: str, filename: str, request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(401)
-    # Sanitize
     if ".." in video_id or ".." in filename or "/" in video_id:
         raise HTTPException(400)
     fpath = Path(config.OUTPUT_DIR) / video_id / filename
@@ -289,8 +313,6 @@ a:hover{text-decoration:underline}
 .progress-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:12px;
   font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
 
-.step-label{font-size:14px;color:#ccc;margin-top:4px}
-
 .logs{background:#0c0c14;border:1px solid #1e1e2e;border-radius:8px;padding:12px;
   font-family:'SF Mono',Monaco,Consolas,monospace;font-size:12px;line-height:1.6;
   max-height:300px;overflow-y:auto;color:#9ca3af;white-space:pre-wrap;word-break:break-all}
@@ -299,12 +321,21 @@ a:hover{text-decoration:underline}
 .input-row input{flex:1;background:#0c0c14;border:1px solid #2a2a3a;border-radius:8px;
   padding:10px 14px;color:#e0e0e0;font-size:14px;outline:none}
 .input-row input:focus{border-color:#6366f1}
+
+textarea{width:100%;background:#0c0c14;border:1px solid #2a2a3a;border-radius:8px;
+  padding:10px 14px;color:#e0e0e0;font-size:13px;font-family:inherit;outline:none;resize:vertical;
+  min-height:60px}
+textarea:focus{border-color:#6366f1}
+.transcript-toggle{color:#818cf8;cursor:pointer;font-size:13px;margin-bottom:8px;display:inline-block}
+.transcript-toggle:hover{text-decoration:underline}
+
 .btn{padding:10px 20px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;
   transition:all .2s}
 .btn-primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
 .btn-primary:hover{opacity:.9}
 .btn-danger{background:#7f1d1d;color:#fca5a5}
 .btn-danger:hover{background:#991b1b}
+.btn-sm{padding:6px 14px;font-size:12px}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 
 .outputs-list{list-style:none}
@@ -317,6 +348,9 @@ a:hover{text-decoration:underline}
 .output-files a:hover{background:#2a2a3a;text-decoration:none}
 
 .empty{color:#555;text-align:center;padding:20px;font-size:14px}
+.hint{color:#666;font-size:12px;margin-top:4px}
+.success{color:#4ade80}
+.error-text{color:#f87171}
 </style>
 </head>
 <body>
@@ -331,7 +365,7 @@ a:hover{text-decoration:underline}
   <h2>Pipeline Status</h2>
   <div>
     <span id="badge" class="status-badge status-idle">idle</span>
-    <span id="step-label" class="step-label" style="margin-left:12px"></span>
+    <span id="step-label" style="margin-left:12px;font-size:14px;color:#ccc"></span>
   </div>
   <div class="progress-wrap">
     <div id="bar" class="progress-bar" style="width:0%"></div>
@@ -347,7 +381,25 @@ a:hover{text-decoration:underline}
     <button id="gen-btn" class="btn btn-primary" onclick="generate()">Generate</button>
     <button id="cancel-btn" class="btn btn-danger" onclick="cancelPipeline()" disabled>Cancel</button>
   </div>
-  <div id="gen-msg" style="font-size:13px;margin-top:4px;color:#888"></div>
+
+  <div style="margin-top:12px">
+    <span class="transcript-toggle" onclick="toggleTranscript()">
+      &#9660; Manual Transcript (paste if auto-download fails)
+    </span>
+    <div id="transcript-section" style="display:none;margin-top:8px">
+      <textarea id="transcript-input" rows="6"
+        placeholder="Paste the video transcript here if automatic download fails.&#10;&#10;You can get it from YouTube (click ... under video > Show transcript) or Google the transcript."></textarea>
+      <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary btn-sm" onclick="saveTranscript()">Save Transcript</button>
+        <span id="transcript-msg" class="hint"></span>
+      </div>
+      <p class="hint" style="margin-top:6px">
+        Save the transcript first, then click Generate. The pipeline will use your pasted text instead of downloading.
+      </p>
+    </div>
+  </div>
+
+  <div id="gen-msg" style="font-size:13px;margin-top:8px;color:#888"></div>
 </div>
 
 <!-- Logs -->
@@ -366,6 +418,40 @@ a:hover{text-decoration:underline}
 
 <script>
 const $ = s => document.querySelector(s);
+
+function toggleTranscript() {
+  const sec = $('#transcript-section');
+  sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveTranscript() {
+  const url = $('#url-input').value.trim();
+  const text = $('#transcript-input').value.trim();
+  const msg = $('#transcript-msg');
+
+  if (!url) { msg.textContent = 'Enter a YouTube URL first'; msg.className = 'hint error-text'; return; }
+  if (!text) { msg.textContent = 'Paste transcript text'; msg.className = 'hint error-text'; return; }
+
+  msg.textContent = 'Saving...';
+  msg.className = 'hint';
+  try {
+    const r = await fetch('/api/transcript', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url, transcript: text})
+    });
+    const d = await r.json();
+    if (r.ok) {
+      msg.textContent = '✓ ' + d.message;
+      msg.className = 'hint success';
+    } else {
+      msg.textContent = d.detail || 'Error saving';
+      msg.className = 'hint error-text';
+    }
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message;
+    msg.className = 'hint error-text';
+  }
+}
 
 async function fetchStatus() {
   try {
