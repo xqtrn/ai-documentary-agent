@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from pathlib import Path
 
 import anthropic
@@ -36,7 +37,7 @@ CRITICAL RULES FOR VISUAL PROMPTS:
 - Style: photorealistic cinematic, NOT animation, NOT stock footage
 - Include specific details: ethnicity of people, clothing period, architecture style, weather, time of day
 
-OUTPUT FORMAT: Return a JSON array of scene objects. Output ONLY valid JSON, no markdown code blocks.
+OUTPUT FORMAT: Return a JSON array of scene objects. Output ONLY valid JSON, no markdown code blocks, no trailing commas.
 
 [
   {{
@@ -49,6 +50,78 @@ OUTPUT FORMAT: Return a JSON array of scene objects. Output ONLY valid JSON, no 
     "duration_sec": 10
   }}
 ]"""
+
+
+def _fix_json(text: str) -> str:
+    """Fix common JSON issues from LLM output."""
+    # Remove markdown code blocks
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        # Remove first line (```json) and last line (```)
+        start = 1
+        end = len(lines)
+        for i in range(len(lines) - 1, 0, -1):
+            if lines[i].strip().startswith("```"):
+                end = i
+                break
+        text = "\n".join(lines[start:end])
+
+    # Remove trailing commas before } or ]
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    # Fix single quotes to double quotes (careful with apostrophes in text)
+    # Only do this if the JSON doesn't parse as-is
+    return text.strip()
+
+
+def _parse_json_robust(raw_text: str) -> list:
+    """Try multiple strategies to parse JSON from LLM output."""
+    text = raw_text.strip()
+
+    # Strategy 1: Direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: Fix common issues
+    fixed = _fix_json(text)
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 3: Find JSON array in text
+    match = re.search(r'\[.*\]', fixed, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            # Try fixing the extracted array
+            arr_text = re.sub(r',\s*([}\]])', r'\1', match.group())
+            try:
+                return json.loads(arr_text)
+            except json.JSONDecodeError:
+                pass
+
+    # Strategy 4: Try to parse as individual objects and collect
+    objects = []
+    for match in re.finditer(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', fixed):
+        try:
+            obj = json.loads(match.group())
+            if "scene_number" in obj or "narration" in obj:
+                objects.append(obj)
+        except json.JSONDecodeError:
+            continue
+    if objects:
+        return objects
+
+    # Last resort: raise with context
+    raise json.JSONDecodeError(
+        f"Could not parse JSON after all strategies. First 200 chars: {text[:200]}",
+        text, 0
+    )
 
 
 def split_into_scenes(script_data: dict, output_dir: Path) -> dict:
@@ -70,14 +143,12 @@ def split_into_scenes(script_data: dict, output_dir: Path) -> dict:
     )
 
     raw_text = response.content[0].text
+    logger.info("Scene splitter raw response: %d chars", len(raw_text))
 
-    # Parse JSON from response (handle potential markdown wrapping)
-    json_text = raw_text.strip()
-    if json_text.startswith("```"):
-        lines = json_text.split("\n")
-        json_text = "\n".join(lines[1:-1])
+    scenes = _parse_json_robust(raw_text)
 
-    scenes = json.loads(json_text)
+    if not isinstance(scenes, list) or len(scenes) == 0:
+        raise RuntimeError(f"Scene splitter returned invalid data: expected list of scenes, got {type(scenes)}")
 
     total_duration = sum(s.get("duration_sec", 10) for s in scenes)
 
@@ -90,7 +161,6 @@ def split_into_scenes(script_data: dict, output_dir: Path) -> dict:
         "output_tokens": response.usage.output_tokens,
     }
 
-    # Save checkpoint
     with open(output_dir / "step4_scenes.json", "w") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
