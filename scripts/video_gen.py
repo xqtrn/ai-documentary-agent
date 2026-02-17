@@ -12,13 +12,29 @@ import config
 
 logger = logging.getLogger(__name__)
 
+MAX_PROMPT_LENGTH = 950  # Runway limit is 1000, leave buffer
+
+
+def _truncate_prompt(prompt: str, max_len: int = MAX_PROMPT_LENGTH) -> str:
+    """Truncate prompt to max length, keeping the no-text suffix."""
+    suffix = " no text, no letters, no words, no subtitles, no signs, no writing, no numbers, no captions"
+    if len(prompt) <= max_len:
+        return prompt
+    # Reserve space for suffix
+    available = max_len - len(suffix) - 2
+    truncated = prompt[:available].rsplit(".", 1)[0]  # Cut at last sentence
+    if not truncated:
+        truncated = prompt[:available]
+    return truncated + "." + suffix
+
 
 def generate_image(client: runwayml.RunwayML, prompt: str, scene_num: int, output_dir: Path) -> tuple:
-    """Generate a reference image using Runway text_to_image. Returns (local_path, task_output_url)."""
-    full_prompt = (
+    """Generate a reference image using Runway text_to_image."""
+    full_prompt = _truncate_prompt(
         f"{prompt}. Photorealistic, cinematic, high detail. "
         "no text, no letters, no words, no subtitles, no signs, no writing, no numbers, no captions"
     )
+    logger.info("Scene %d image prompt (%d chars): %s", scene_num, len(full_prompt), full_prompt[:100] + "...")
 
     for attempt in range(config.MAX_RETRIES):
         try:
@@ -30,11 +46,9 @@ def generate_image(client: runwayml.RunwayML, prompt: str, scene_num: int, outpu
             task_id = task.id
             logger.info("Scene %d image task created: %s", scene_num, task_id)
 
-            # Poll for completion
             result = poll_task(client, task_id, timeout=300)
             image_url = result.output[0]
 
-            # Download image
             image_path = output_dir / f"scene_{scene_num:03d}.png"
             resp = httpx.get(image_url, timeout=120)
             resp.raise_for_status()
@@ -51,10 +65,11 @@ def generate_image(client: runwayml.RunwayML, prompt: str, scene_num: int, outpu
 
 def generate_video(client: runwayml.RunwayML, image_url: str, prompt: str, scene_num: int, duration: int, output_dir: Path) -> Path:
     """Generate video clip from reference image using Runway image_to_video."""
-    full_prompt = (
+    full_prompt = _truncate_prompt(
         f"{prompt}. Smooth cinematic motion, photorealistic. "
         "no text, no letters, no words, no subtitles, no signs"
     )
+    logger.info("Scene %d video prompt (%d chars)", scene_num, len(full_prompt))
 
     for attempt in range(config.MAX_RETRIES):
         try:
@@ -71,7 +86,6 @@ def generate_video(client: runwayml.RunwayML, image_url: str, prompt: str, scene
             result = poll_task(client, task_id, timeout=600)
             video_url = result.output[0]
 
-            # Download video
             video_path = output_dir / f"scene_{scene_num:03d}.mp4"
             resp = httpx.get(video_url, timeout=120)
             resp.raise_for_status()
@@ -110,15 +124,13 @@ def process_scene(client: runwayml.RunwayML, scene: dict, images_dir: Path, vide
     prompt = scene["visual_prompt"]
     camera = scene.get("camera", "")
     lighting = scene.get("lighting", "")
+    # Keep prompt concise for Runway's 1000 char limit
     full_prompt = f"{prompt}. Camera: {camera}. Lighting: {lighting}"
     duration = scene.get("duration_sec", 10)
 
     logger.info("Processing scene %d...", num)
 
-    # Step 1: Generate reference image
     image_path, image_url = generate_image(client, full_prompt, num, images_dir)
-
-    # Step 2: Generate video from image
     video_path = generate_video(client, image_url, full_prompt, num, duration, videos_dir)
 
     return {

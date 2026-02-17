@@ -21,7 +21,7 @@ TASK: Break this script into {scene_min}-{scene_max} scenes, each 8-12 seconds l
 For each scene, provide:
 1. **scene_number**: Sequential number
 2. **narration**: The exact narration text for this scene (from the script)
-3. **visual_prompt**: A detailed prompt for AI video generation (Runway Gen-4)
+3. **visual_prompt**: A concise prompt for AI video generation (Runway Gen-4, MAX 300 characters)
 4. **camera**: Camera movement/angle (e.g., "slow dolly forward", "aerial pan left", "close-up static")
 5. **lighting**: Lighting description (e.g., "golden hour warm light", "dramatic side lighting")
 6. **mood**: Emotional mood (e.g., "tense", "awe-inspiring", "somber")
