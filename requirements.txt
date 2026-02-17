@@ -8,3 +8,4 @@ uvicorn>=0.32.0
 python-jose[cryptography]>=3.3.0
 requests>=2.31.0
 pysocks>=1.7.1
+runwayml>=4.0.0

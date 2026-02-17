@@ -2,6 +2,7 @@
 
 import json
 import logging
+import subprocess
 import time
 from pathlib import Path
 
@@ -14,11 +15,16 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://api.elevenlabs.io/v1"
 
 
-def get_headers():
-    return {
+def get_headers(for_tts=False):
+    headers = {
         "xi-api-key": config.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
     }
+    if for_tts:
+        headers["Content-Type"] = "application/json"
+        headers["Accept"] = "audio/mpeg"
+    else:
+        headers["Content-Type"] = "application/json"
+    return headers
 
 
 def get_voice_id(voice_name: str) -> str:
@@ -26,11 +32,18 @@ def get_voice_id(voice_name: str) -> str:
     resp = httpx.get(f"{BASE_URL}/voices", headers=get_headers(), timeout=30)
     resp.raise_for_status()
     voices = resp.json()["voices"]
+    
+    # Log available voices
+    voice_names = [v["name"] for v in voices]
+    logger.info("Available voices: %s", ", ".join(voice_names))
+    
     for v in voices:
         if v["name"].lower() == voice_name.lower():
+            logger.info("Found voice '%s': %s", voice_name, v["voice_id"])
             return v["voice_id"]
+    
     # Fallback to first available
-    logger.warning("Voice '%s' not found, using first available", voice_name)
+    logger.warning("Voice '%s' not found, using '%s'", voice_name, voices[0]["name"])
     return voices[0]["voice_id"]
 
 
@@ -40,12 +53,12 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
 
     voice_id = get_voice_id(config.ELEVENLABS_VOICE)
 
-    # Clean script text - remove markers like [HOOK], [CLIMAX], etc.
+    # Clean script text
     clean_text = script_text
     for marker in ["[HOOK]", "[CLIMAX]", "[FINALE]"]:
         clean_text = clean_text.replace(marker, "")
 
-    # Split into chunks if too long (ElevenLabs has limits)
+    # Split into chunks
     max_chars = 5000
     chunks = []
     paragraphs = clean_text.split("\n\n")
@@ -70,7 +83,7 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
             try:
                 resp = httpx.post(
                     f"{BASE_URL}/text-to-speech/{voice_id}",
-                    headers=get_headers(),
+                    headers=get_headers(for_tts=True),
                     json={
                         "text": chunk,
                         "model_id": config.ELEVENLABS_MODEL,
@@ -83,12 +96,18 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
                     },
                     timeout=120,
                 )
+                
+                if resp.status_code == 401:
+                    # Log the actual error body for debugging
+                    logger.error("ElevenLabs 401 response body: %s", resp.text[:500])
+                    logger.error("API key prefix: %s...", config.ELEVENLABS_API_KEY[:10])
+                
                 resp.raise_for_status()
 
                 chunk_path = output_dir / f"voiceover_part_{i:03d}.mp3"
                 chunk_path.write_bytes(resp.content)
                 audio_parts.append(chunk_path)
-                logger.info("Voiceover chunk %d/%d generated", i + 1, len(chunks))
+                logger.info("Voiceover chunk %d/%d generated (%d bytes)", i + 1, len(chunks), len(resp.content))
                 break
 
             except Exception as e:
@@ -97,7 +116,7 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
                     raise
                 time.sleep(5 * (attempt + 1))
 
-    # Concatenate audio parts using ffmpeg
+    # Concatenate audio parts
     if len(audio_parts) == 1:
         final_path = output_dir / "voiceover.mp3"
         audio_parts[0].rename(final_path)
@@ -108,12 +127,10 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
                 f.write(f"file '{p}'\n")
 
         final_path = output_dir / "voiceover.mp3"
-        import subprocess
         subprocess.run(
             ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(final_path)],
             check=True, capture_output=True, timeout=120,
         )
-        # Clean up parts
         for p in audio_parts:
             p.unlink(missing_ok=True)
         concat_list.unlink(missing_ok=True)
@@ -122,16 +139,14 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
     return final_path
 
 
-def generate_sfx(scenes: list[dict], output_dir: Path) -> list[dict]:
+def generate_sfx(scenes: list, output_dir: Path) -> list:
     """Generate SFX for key scenes using ElevenLabs Sound Effects."""
     logger.info("Generating SFX for key scenes...")
 
     sfx_dir = output_dir / "sfx"
     sfx_dir.mkdir(parents=True, exist_ok=True)
-
     sfx_results = []
 
-    # Pick scenes that would benefit from SFX based on mood
     sfx_moods = {"tense", "dramatic", "action", "battle", "war", "explosion", "storm", "triumphant", "epic"}
 
     for scene in scenes:
@@ -164,7 +179,6 @@ def generate_sfx(scenes: list[dict], output_dir: Path) -> list[dict]:
                 })
                 logger.info("SFX generated for scene %d", scene_num)
                 break
-
             except Exception as e:
                 logger.warning("SFX attempt %d/%d failed for scene %d: %s", attempt + 1, config.MAX_RETRIES, scene_num, e)
                 if attempt == config.MAX_RETRIES - 1:
@@ -176,7 +190,6 @@ def generate_sfx(scenes: list[dict], output_dir: Path) -> list[dict]:
 
 
 def _mood_to_sfx_prompt(mood: str, visual_prompt: str) -> str:
-    """Convert mood/visual to an SFX prompt."""
     mood_map = {
         "battle": "sounds of distant battle, swords clashing, war drums",
         "war": "distant artillery, marching soldiers, wind",
@@ -188,11 +201,9 @@ def _mood_to_sfx_prompt(mood: str, visual_prompt: str) -> str:
         "epic": "epic orchestral swell, deep drums, brass",
         "action": "fast-paced percussion, impacts, whooshes",
     }
-
     for key, sfx in mood_map.items():
         if key in mood:
             return sfx
-
     return "ambient atmospheric sound, subtle cinematic texture"
 
 
@@ -210,7 +221,6 @@ def generate_audio(script_data: dict, scenes_data: dict, output_dir: Path) -> di
         "sfx_count": len(sfx_results),
     }
 
-    # Save checkpoint
     with open(output_dir / "step6_audio.json", "w") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
