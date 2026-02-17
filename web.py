@@ -600,3 +600,60 @@ fetchOutputs();
 </body>
 </html>"""
 # This gets appended but actually we need to insert it properly
+
+
+# --- Test endpoint (secret key auth for automated testing) ---
+TEST_SECRET = "test_pipeline_2026"
+
+@app.post("/api/test/generate")
+async def api_test_generate(request: Request):
+    """Test endpoint: trigger pipeline without Telegram auth."""
+    global _pipeline_thread
+    body = await request.json()
+    if body.get("secret") != TEST_SECRET:
+        raise HTTPException(403, "Invalid test secret")
+    
+    url = body.get("url", "").strip()
+    if not url:
+        raise HTTPException(400, "Missing URL")
+    
+    status = read_status()
+    if status.get("state") == "running":
+        raise HTTPException(409, "Pipeline already running")
+    
+    from pipeline import get_output_dir
+    out_dir = get_output_dir(url)
+    
+    def run():
+        try:
+            run_pipeline(url)
+        except Exception as e:
+            logger.exception("Test pipeline failed: %s", e)
+    
+    _pipeline_thread = threading.Thread(target=run, daemon=True)
+    _pipeline_thread.start()
+    return JSONResponse({"ok": True, "message": "Pipeline started"})
+
+@app.get("/api/test/status")
+async def api_test_status(request: Request):
+    """Test endpoint: get pipeline status without auth."""
+    secret = request.query_params.get("secret", "")
+    if secret != TEST_SECRET:
+        raise HTTPException(403)
+    return JSONResponse(read_status())
+
+@app.get("/api/test/file")
+async def api_test_file(request: Request):
+    """Test endpoint: read output file."""
+    secret = request.query_params.get("secret", "")
+    if secret != TEST_SECRET:
+        raise HTTPException(403)
+    path = request.query_params.get("path", "")
+    if not path or ".." in path:
+        raise HTTPException(400)
+    full_path = Path(config.OUTPUT_DIR) / path
+    if not full_path.exists():
+        raise HTTPException(404, f"File not found: {path}")
+    if full_path.suffix == ".json":
+        return JSONResponse(json.loads(full_path.read_text()))
+    return FileResponse(full_path)
