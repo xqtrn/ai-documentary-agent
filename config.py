@@ -1,7 +1,6 @@
 import os
 
-# API Keys - use .get() so missing keys don't crash on import
-# They'll fail gracefully at the step that needs them
+# API Keys
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 RUNWAY_API_KEY = os.environ.get("RUNWAY_API_KEY", "")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
@@ -15,11 +14,12 @@ CLAUDE_MODEL = "claude-opus-4-6"
 ELEVENLABS_VOICE = "Adam"
 ELEVENLABS_MODEL = "eleven_multilingual_v2"
 
-TARGET_DURATION_MIN = 18
-TARGET_DURATION_MAX = 22
+# TEST MODE: 30-60 second sketch video (4-6 scenes)
+TARGET_DURATION_MIN = 0.5  # 30 sec
+TARGET_DURATION_MAX = 1    # 60 sec
 SCENE_DURATION_SEC = 10
-SCENES_COUNT_MIN = 120
-SCENES_COUNT_MAX = 150
+SCENES_COUNT_MIN = 4
+SCENES_COUNT_MAX = 6
 
 RUNWAY_IMAGE_MODEL = "gen4_image"
 RUNWAY_VIDEO_MODEL = "gen4_turbo"

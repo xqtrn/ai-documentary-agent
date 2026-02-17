@@ -239,6 +239,53 @@ async def download_file(video_id: str, filename: str, request: Request):
     return FileResponse(fpath, filename=filename)
 
 
+
+@app.post("/api/reset")
+async def api_reset(request: Request):
+    """Reset pipeline checkpoint to re-run from a specific step."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401)
+    body = await request.json()
+    video_id = body.get("video_id", "").strip()
+    from_step = body.get("from_step", "scenes")  # Reset from this step
+    
+    if not video_id:
+        raise HTTPException(400, "Missing video_id")
+    
+    out_dir = Path(config.OUTPUT_DIR) / video_id
+    if not out_dir.exists():
+        raise HTTPException(404, "Video output not found")
+    
+    # Map step names to their checkpoint and output files
+    step_files = {
+        "scenes": ["step4_scenes.json", "checkpoint.json"],
+        "video": ["step5_videos.json", "checkpoint.json"],
+        "audio": ["step6_audio.json", "checkpoint.json"],
+        "music": ["step7_music.json", "checkpoint.json"],
+        "assembly": ["checkpoint.json"],
+    }
+    
+    files_to_remove = step_files.get(from_step, ["checkpoint.json"])
+    removed = []
+    for fname in files_to_remove:
+        fpath = out_dir / fname
+        if fpath.exists():
+            fpath.unlink()
+            removed.append(fname)
+    
+    # Reset checkpoint to the step before
+    step_order = ["source", "virality", "script", "scenes", "video", "audio", "music", "assembly"]
+    idx = step_order.index(from_step) if from_step in step_order else 0
+    if idx > 0:
+        prev_step = step_order[idx - 1]
+        checkpoint_file = out_dir / "checkpoint.json"
+        checkpoint_file.write_text(json.dumps({"last_step": prev_step}))
+    
+    logger.info("Reset pipeline for %s from step %s, removed: %s", video_id, from_step, removed)
+    return JSONResponse({"ok": True, "message": f"Reset from {from_step}, removed {removed}"})
+
+
 # --- HTML Templates ---
 
 LOGIN_HTML = """<!DOCTYPE html>
@@ -525,3 +572,4 @@ fetchOutputs();
 </script>
 </body>
 </html>"""
+# This gets appended but actually we need to insert it properly
