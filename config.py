@@ -11,7 +11,7 @@ TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "ai_documentary_
 
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./output")
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
-CLAUDE_MODEL = "claude-sonnet-4-5-20241022"
+CLAUDE_MODEL = "claude-sonnet-4-5-20250514"
 ELEVENLABS_VOICE = "Adam"
 ELEVENLABS_MODEL = "eleven_multilingual_v2"
 
