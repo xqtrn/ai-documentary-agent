@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Telegram bot for AI Documentary Agent."""
+"""Telegram bot + web server launcher for AI Documentary Agent."""
 
 import logging
+import multiprocessing
 import os
 import re
 import traceback
@@ -60,22 +61,19 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not url.startswith("http"):
         url = "https://" + url
 
-    chat_id = update.effective_chat.id
     await update.message.reply_text(f"Starting pipeline for:\n{url}\n\nThis will take a while...")
 
     try:
-        # Run pipeline (blocking - in production, use background task)
         await update.message.reply_text("Step 1/8: Analyzing source video...")
         output_dir = run_pipeline(url)
         output_path = Path(output_dir)
 
         await update.message.reply_text("Pipeline complete! Sending files...")
 
-        # Send final video
         video_path = output_path / "final_video.mp4"
         if video_path.exists():
             file_size = video_path.stat().st_size
-            if file_size < 50 * 1024 * 1024:  # Telegram 50MB limit
+            if file_size < 50 * 1024 * 1024:
                 await update.message.reply_video(
                     video=open(video_path, "rb"),
                     caption="AI Documentary - Final Video",
@@ -87,7 +85,6 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"File saved at: {video_path}"
                 )
 
-        # Send metadata
         meta_path = output_path / "metadata.json"
         if meta_path.exists():
             await update.message.reply_document(
@@ -95,7 +92,6 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption="YouTube Metadata (title, description, tags)",
             )
 
-        # Send subtitles
         srt_path = output_path / "subtitles.srt"
         if srt_path.exists():
             await update.message.reply_document(
@@ -103,7 +99,6 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption="Subtitles (SRT)",
             )
 
-        # Send analysis
         analysis_path = output_path / "analysis.md"
         if analysis_path.exists():
             await update.message.reply_document(
@@ -120,7 +115,6 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Check status of output directories."""
     output_base = Path(config.OUTPUT_DIR)
     if not output_base.exists():
         await update.message.reply_text("No outputs yet.")
@@ -132,10 +126,10 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     status_lines = []
-    for d in dirs[-5:]:  # Last 5
+    import json
+    for d in dirs[-5:]:
         checkpoint = d / "checkpoint.json"
         if checkpoint.exists():
-            import json
             data = json.loads(checkpoint.read_text())
             step = data.get("last_step", "unknown")
             status_lines.append(f"{d.name}: step={step}")
@@ -145,24 +139,45 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Recent outputs:\n" + "\n".join(status_lines))
 
 
-def main():
+def run_bot():
+    """Run the Telegram bot (blocking)."""
     if not config.TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set!")
-        logger.info("Set the TELEGRAM_BOT_TOKEN environment variable and restart.")
-        # Keep the process alive so Railway doesn't restart loop
         import time
         while True:
             logger.info("Waiting for TELEGRAM_BOT_TOKEN to be configured...")
             time.sleep(60)
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", handle_status))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
 
-    logger.info("Bot started. Waiting for messages...")
+    logger.info("Telegram bot started. Waiting for messages...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+def run_web():
+    """Run the FastAPI web server."""
+    import uvicorn
+    from web import app as web_app
+    logger.info("Starting web server on port %d...", config.WEB_PORT)
+    uvicorn.run(web_app, host="0.0.0.0", port=config.WEB_PORT, log_level="info")
+
+
+def main():
+    # Run both bot and web server as separate processes
+    bot_proc = multiprocessing.Process(target=run_bot, name="telegram-bot")
+    web_proc = multiprocessing.Process(target=run_web, name="web-server")
+
+    bot_proc.start()
+    web_proc.start()
+
+    logger.info("Both processes started: bot (pid=%d), web (pid=%d)", bot_proc.pid, web_proc.pid)
+
+    # Wait for either to exit
+    bot_proc.join()
+    web_proc.join()
 
 
 if __name__ == "__main__":

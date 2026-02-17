@@ -5,8 +5,10 @@ RUNWAY_API_KEY = os.environ["RUNWAY_API_KEY"]
 ELEVENLABS_API_KEY = os.environ["ELEVENLABS_API_KEY"]
 BEATOVEN_API_KEY = os.environ["BEATOVEN_API_KEY"]
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "ai_documentary_bot")
 
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./output")
+DATA_DIR = os.environ.get("DATA_DIR", "./data")
 CLAUDE_MODEL = "claude-sonnet-4-5-20241022"
 ELEVENLABS_VOICE = "Adam"
 ELEVENLABS_MODEL = "eleven_multilingual_v2"
@@ -25,3 +27,4 @@ BEATOVEN_BASE_URL = "https://api.beatoven.ai/api/v2"
 
 MAX_RETRIES = 3
 BATCH_SIZE = 10
+WEB_PORT = int(os.environ.get("PORT", "8080"))

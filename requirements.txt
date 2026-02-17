@@ -4,3 +4,6 @@ python-telegram-bot>=21.0
 youtube-transcript-api>=0.6.0
 yt-dlp>=2024.0
 ffmpeg-python>=0.2.0
+fastapi>=0.115.0
+uvicorn>=0.32.0
+python-jose[cryptography]>=3.3.0
