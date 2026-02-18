@@ -30,9 +30,9 @@ ENGINE_CONFIG = {
         "display_name": "Veo 3.1",
         "description": "Google's latest video model via Runway. Best cinematic realism with native audio.",
         "max_prompt_chars": 1000,
-        "max_duration_sec": 10,
+        "max_duration_sec": 8,
         "has_native_audio": True,
-        "cost_per_sec": 12,
+        "cost_per_sec": 40,
         "ratio": "1280:720",
     },
     "veo3.1_fast": {
@@ -41,9 +41,9 @@ ENGINE_CONFIG = {
         "display_name": "Veo 3.1 Fast",
         "description": "Faster variant of Veo 3.1. Good balance of speed and quality, with native audio.",
         "max_prompt_chars": 1000,
-        "max_duration_sec": 10,
+        "max_duration_sec": 8,
         "has_native_audio": True,
-        "cost_per_sec": 6,
+        "cost_per_sec": 20,
         "ratio": "1280:720",
     },
     "sora-2-pro": {
@@ -97,7 +97,7 @@ ENGINE_CONFIG = {
         "display_name": "Veo 3",
         "description": "Google's Veo 3 via Runway. Good quality with native audio generation.",
         "max_prompt_chars": 1000,
-        "max_duration_sec": 10,
+        "max_duration_sec": 8,
         "has_native_audio": True,
         "cost_per_sec": 10,
         "ratio": "1280:720",
@@ -121,7 +121,7 @@ DEFAULT_ENGINE = os.environ.get("DEFAULT_ENGINE", "veo3.1")
 # Scene config
 TARGET_DURATION_MIN = 0.5
 TARGET_DURATION_MAX = 1
-SCENE_DURATION_SEC = 10
+SCENE_DURATION_SEC = 8
 SCENES_COUNT_MIN = 3
 SCENES_COUNT_MAX = 4
 
