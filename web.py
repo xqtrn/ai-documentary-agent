@@ -1138,19 +1138,26 @@ async def test_generate(body: GenerateRequest):
     mode = body.mode
     engine = _resolve_engine(body.engine)
 
+    # Compute video_id — unique per engine for fresh mode
+    base_video_id = _extract_video_id(url)
+    if mode == "fresh" and engine != config.DEFAULT_ENGINE:
+        suffix = engine.replace("-", "_").replace(".", "")
+        video_id = f"{base_video_id}_{suffix}"
+    else:
+        video_id = base_video_id
+
     def run_bg():
         try:
             if mode == "analysis":
                 run_analysis(url, engine=engine)
             elif mode == "fresh":
-                run_pipeline(url, resume=False, engine=engine)
+                run_pipeline(url, resume=False, engine=engine, video_id=video_id)
             else:
                 run_pipeline(url, engine=engine)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
     threading.Thread(target=run_bg, daemon=True).start()
-    video_id = _extract_video_id(url)
     return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id}
 
 
@@ -1306,19 +1313,26 @@ async def auth_generate(request: Request, body: AuthGenerateRequest):
     mode = body.mode
     engine = _resolve_engine(body.engine)
 
+    # Compute video_id — unique per engine for fresh mode
+    base_video_id = _extract_video_id(url)
+    if mode == "fresh" and engine != config.DEFAULT_ENGINE:
+        suffix = engine.replace("-", "_").replace(".", "")
+        video_id = f"{base_video_id}_{suffix}"
+    else:
+        video_id = base_video_id
+
     def run_bg():
         try:
             if mode == "analysis":
                 run_analysis(url, engine=engine)
             elif mode == "fresh":
-                run_pipeline(url, resume=False, engine=engine)
+                run_pipeline(url, resume=False, engine=engine, video_id=video_id)
             else:
                 run_pipeline(url, engine=engine)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
     threading.Thread(target=run_bg, daemon=True).start()
-    video_id = _extract_video_id(url)
     return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id}
 
 
