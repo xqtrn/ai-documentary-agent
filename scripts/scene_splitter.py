@@ -16,7 +16,7 @@ SCENE_SPLIT_PROMPT = """You are a world-class cinematic director creating prompt
 SCRIPT:
 {script}
 
-TASK: Break this script into {scene_min}-{scene_max} scenes, each 8 seconds long.
+TASK: Break this script into EXACTLY {scene_count} scenes, each 8 seconds long. You MUST output exactly {scene_count} scenes — no more, no fewer.
 
 For each scene provide:
 1. **scene_number**: Sequential number
@@ -43,6 +43,8 @@ SFX PROMPT RULES:
 - Be specific: "large crowd murmuring, distant church bells, horse hooves on cobblestone"
 - NEVER include graphic/violent descriptions — content moderation will block them
 - Focus on: wind, rain, fire crackling, crowd murmur, bells, footsteps, drums, nature sounds
+
+CRITICAL: Output EXACTLY {scene_count} scene objects. Distribute the narration evenly across all {scene_count} scenes.
 
 OUTPUT FORMAT: Return ONLY a JSON array, no markdown code blocks.
 
@@ -125,10 +127,11 @@ def split_into_scenes(script_data: dict, output_dir) -> dict:
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
+    target_count = config.SCENES_COUNT_MAX
+
     prompt = SCENE_SPLIT_PROMPT.format(
         script=script_data["script"],
-        scene_min=config.SCENES_COUNT_MIN,
-        scene_max=config.SCENES_COUNT_MAX,
+        scene_count=target_count,
     )
 
     response = client.messages.create(
@@ -144,6 +147,17 @@ def split_into_scenes(script_data: dict, output_dir) -> dict:
 
     if not isinstance(scenes, list) or len(scenes) == 0:
         raise RuntimeError(f"Scene splitter returned invalid data: {type(scenes)}")
+
+    # Enforce max scene count — truncate if Claude returned too many
+    if len(scenes) > config.SCENES_COUNT_MAX:
+        logger.warning(
+            "Scene splitter returned %d scenes, truncating to %d",
+            len(scenes), config.SCENES_COUNT_MAX,
+        )
+        scenes = scenes[:config.SCENES_COUNT_MAX]
+        # Renumber scenes
+        for i, scene in enumerate(scenes):
+            scene["scene_number"] = i + 1
 
     total_duration = sum(s.get("duration_sec", 10) for s in scenes)
 

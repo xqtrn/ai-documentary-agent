@@ -63,7 +63,13 @@ def _submit_video(prompt: str, duration: int) -> str:
 
 
 def _poll_video(request_id: str, max_wait: int = 300, interval: int = 5) -> dict:
-    """Poll xAI until video is done. Returns the response dict with video URL."""
+    """Poll xAI until video is done. Returns the response dict with video URL.
+
+    xAI response formats:
+      - Pending: {"status": "pending"}
+      - Done:    {"video": {"url": "..."}, "model": "..."}  (no status field)
+      - Failed:  {"status": "failed", ...}
+    """
     config.check_api_key("XAI_API_KEY")
 
     url = f"{config.XAI_VIDEO_BASE_URL}/videos/{request_id}"
@@ -76,13 +82,17 @@ def _poll_video(request_id: str, max_wait: int = 300, interval: int = 5) -> dict
             resp.raise_for_status()
             data = resp.json()
 
-        status = data.get("status", "").lower()
-        if status == "done":
+        # xAI returns video.url directly when done (no "status" field)
+        video_obj = data.get("video")
+        if isinstance(video_obj, dict) and video_obj.get("url"):
+            logger.info("xAI video %s completed.", request_id)
             return data
+
+        status = data.get("status", "").lower()
         if status in ("failed", "error"):
             raise RuntimeError(f"xAI video generation failed: {data}")
 
-        logger.debug("xAI video %s status: %s", request_id, status)
+        logger.debug("xAI video %s status: %s", request_id, status or "waiting")
         time.sleep(interval)
 
     raise TimeoutError(f"xAI video {request_id} did not complete within {max_wait}s")
@@ -127,7 +137,9 @@ def generate_single_scene(scene: dict, output_dir) -> dict:
             if "video" in result and isinstance(result["video"], dict):
                 video_url = result["video"].get("url")
             if not video_url:
-                video_url = result.get("url") or result.get("output", [None])[0] if isinstance(result.get("output"), list) else None
+                video_url = result.get("url")
+            if not video_url and isinstance(result.get("output"), list) and result["output"]:
+                video_url = result["output"][0]
             if not video_url:
                 raise RuntimeError(f"No video URL in xAI response: {result}")
 
