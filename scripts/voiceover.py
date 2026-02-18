@@ -1,5 +1,10 @@
-"""Step 6: Generate voiceover and SFX using ElevenLabs."""
+"""Step 6: Generate voiceover and SFX.
 
+Primary: ElevenLabs TTS
+Fallback: edge-tts (Microsoft Edge's TTS API, works from cloud IPs)
+"""
+
+import asyncio
 import json
 import logging
 import subprocess
@@ -32,41 +37,42 @@ def get_voice_id(voice_name: str) -> str:
     resp = httpx.get(f"{BASE_URL}/voices", headers=get_headers(), timeout=30)
     resp.raise_for_status()
     voices = resp.json()["voices"]
-    
-    # Log available voices
+
     voice_names = [v["name"] for v in voices]
     logger.info("Available voices: %s", ", ".join(voice_names))
-    
+
     for v in voices:
         name = v["name"].lower()
         target = voice_name.lower()
-        # Match exact name, or name prefix (e.g., "George" matches "George - Warm, Captivating Storyteller")
         if name == target or name.startswith(target + " ") or name.startswith(target + " -"):
             logger.info("Found voice '%s': %s (ID: %s)", voice_name, v["name"], v["voice_id"])
             return v["voice_id"]
 
-    # Fallback to first available
     logger.warning("Voice '%s' not found, using '%s'", voice_name, voices[0]["name"])
     return voices[0]["voice_id"]
 
 
-def generate_voiceover(script_text: str, output_dir: Path) -> Path:
-    """Generate full narration audio."""
-    logger.info("Generating voiceover (%d chars)...", len(script_text))
+def _is_cloud_blocked(resp) -> bool:
+    """Check if ElevenLabs is blocking free tier from cloud IP."""
+    if resp.status_code == 401:
+        body = resp.text.lower()
+        return "unusual activity" in body or "free tier" in body or "proxy" in body or "vpn" in body
+    return False
+
+
+def generate_voiceover_elevenlabs(script_text: str, output_dir: Path) -> Path:
+    """Generate voiceover using ElevenLabs TTS."""
+    logger.info("Trying ElevenLabs TTS (%d chars)...", len(script_text))
 
     voice_id = get_voice_id(config.ELEVENLABS_VOICE)
-
-    # Clean script text
     clean_text = script_text
     for marker in ["[HOOK]", "[CLIMAX]", "[FINALE]"]:
         clean_text = clean_text.replace(marker, "")
 
-    # Split into chunks
     max_chars = 5000
     chunks = []
     paragraphs = clean_text.split("\n\n")
     current_chunk = ""
-
     for para in paragraphs:
         if len(current_chunk) + len(para) > max_chars:
             if current_chunk:
@@ -74,52 +80,37 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
             current_chunk = para
         else:
             current_chunk += "\n\n" + para
-
     if current_chunk.strip():
         chunks.append(current_chunk.strip())
 
-    logger.info("Split into %d chunks for TTS", len(chunks))
-
+    logger.info("Split into %d chunks for ElevenLabs TTS", len(chunks))
     audio_parts = []
     for i, chunk in enumerate(chunks):
-        for attempt in range(config.MAX_RETRIES):
-            try:
-                resp = httpx.post(
-                    f"{BASE_URL}/text-to-speech/{voice_id}",
-                    headers=get_headers(for_tts=True),
-                    json={
-                        "text": chunk,
-                        "model_id": config.ELEVENLABS_MODEL,
-                        "voice_settings": {
-                            "stability": 0.6,
-                            "similarity_boost": 0.8,
-                            "style": 0.4,
-                            "use_speaker_boost": True,
-                        },
-                    },
-                    timeout=120,
-                )
-                
-                if resp.status_code == 401:
-                    # Log the actual error body for debugging
-                    logger.error("ElevenLabs 401 response body: %s", resp.text[:500])
-                    logger.error("API key prefix: %s...", config.ELEVENLABS_API_KEY[:10])
-                
-                resp.raise_for_status()
+        resp = httpx.post(
+            f"{BASE_URL}/text-to-speech/{voice_id}",
+            headers=get_headers(for_tts=True),
+            json={
+                "text": chunk,
+                "model_id": config.ELEVENLABS_MODEL,
+                "voice_settings": {
+                    "stability": 0.6,
+                    "similarity_boost": 0.8,
+                    "style": 0.4,
+                    "use_speaker_boost": True,
+                },
+            },
+            timeout=120,
+        )
 
-                chunk_path = output_dir / f"voiceover_part_{i:03d}.mp3"
-                chunk_path.write_bytes(resp.content)
-                audio_parts.append(chunk_path)
-                logger.info("Voiceover chunk %d/%d generated (%d bytes)", i + 1, len(chunks), len(resp.content))
-                break
+        if _is_cloud_blocked(resp):
+            raise RuntimeError("ElevenLabs free tier blocked from cloud IP")
 
-            except Exception as e:
-                logger.warning("TTS attempt %d/%d failed for chunk %d: %s", attempt + 1, config.MAX_RETRIES, i, e)
-                if attempt == config.MAX_RETRIES - 1:
-                    raise
-                time.sleep(5 * (attempt + 1))
+        resp.raise_for_status()
+        chunk_path = output_dir / f"voiceover_part_{i:03d}.mp3"
+        chunk_path.write_bytes(resp.content)
+        audio_parts.append(chunk_path)
+        logger.info("ElevenLabs chunk %d/%d generated (%d bytes)", i + 1, len(chunks), len(resp.content))
 
-    # Concatenate audio parts
     if len(audio_parts) == 1:
         final_path = output_dir / "voiceover.mp3"
         audio_parts[0].rename(final_path)
@@ -128,7 +119,6 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
         with open(concat_list, "w") as f:
             for p in audio_parts:
                 f.write(f"file '{p}'\n")
-
         final_path = output_dir / "voiceover.mp3"
         subprocess.run(
             ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(final_path)],
@@ -138,8 +128,55 @@ def generate_voiceover(script_text: str, output_dir: Path) -> Path:
             p.unlink(missing_ok=True)
         concat_list.unlink(missing_ok=True)
 
-    logger.info("Voiceover saved: %s", final_path)
+    logger.info("ElevenLabs voiceover saved: %s", final_path)
     return final_path
+
+
+def generate_voiceover_edge_tts(script_text: str, output_dir: Path) -> Path:
+    """Generate voiceover using edge-tts (Microsoft Edge's free TTS API)."""
+    import edge_tts
+
+    logger.info("Using edge-tts fallback (%d chars)...", len(script_text))
+
+    clean_text = script_text
+    for marker in ["[HOOK]", "[CLIMAX]", "[FINALE]"]:
+        clean_text = clean_text.replace(marker, "")
+
+    # Good documentary narration voices
+    voice = "en-US-GuyNeural"  # Deep, authoritative male voice
+    final_path = output_dir / "voiceover.mp3"
+
+    async def _generate():
+        communicate = edge_tts.Communicate(clean_text, voice)
+        await communicate.save(str(final_path))
+
+    # Run async edge-tts
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                pool.submit(lambda: asyncio.run(_generate())).result(timeout=300)
+        else:
+            loop.run_until_complete(_generate())
+    except RuntimeError:
+        asyncio.run(_generate())
+
+    logger.info("edge-tts voiceover saved: %s", final_path)
+    return final_path
+
+
+def generate_voiceover(script_text: str, output_dir: Path) -> Path:
+    """Generate voiceover with ElevenLabs, falling back to edge-tts."""
+    # Try ElevenLabs first
+    try:
+        return generate_voiceover_elevenlabs(script_text, output_dir)
+    except Exception as e:
+        logger.warning("ElevenLabs TTS failed: %s", str(e)[:200])
+        logger.info("Falling back to edge-tts (Microsoft Edge TTS)...")
+
+    # Fallback to edge-tts
+    return generate_voiceover_edge_tts(script_text, output_dir)
 
 
 def generate_sfx(scenes: list, output_dir: Path) -> list:
@@ -160,33 +197,31 @@ def generate_sfx(scenes: list, output_dir: Path) -> list:
         scene_num = scene["scene_number"]
         sfx_prompt = _mood_to_sfx_prompt(mood, scene.get("visual_prompt", ""))
 
-        for attempt in range(config.MAX_RETRIES):
-            try:
-                resp = httpx.post(
-                    f"{BASE_URL}/sound-generation",
-                    headers=get_headers(),
-                    json={
-                        "text": sfx_prompt,
-                        "duration_seconds": scene.get("duration_sec", 10),
-                    },
-                    timeout=120,
-                )
-                resp.raise_for_status()
-
-                sfx_path = sfx_dir / f"sfx_{scene_num:03d}.mp3"
-                sfx_path.write_bytes(resp.content)
-                sfx_results.append({
-                    "scene_number": scene_num,
-                    "path": str(sfx_path),
-                    "prompt": sfx_prompt,
-                })
-                logger.info("SFX generated for scene %d", scene_num)
+        try:
+            resp = httpx.post(
+                f"{BASE_URL}/sound-generation",
+                headers=get_headers(),
+                json={
+                    "text": sfx_prompt,
+                    "duration_seconds": scene.get("duration_sec", 10),
+                },
+                timeout=120,
+            )
+            if _is_cloud_blocked(resp):
+                logger.warning("ElevenLabs SFX blocked from cloud IP, skipping SFX")
                 break
-            except Exception as e:
-                logger.warning("SFX attempt %d/%d failed for scene %d: %s", attempt + 1, config.MAX_RETRIES, scene_num, e)
-                if attempt == config.MAX_RETRIES - 1:
-                    logger.error("SFX generation failed for scene %d, skipping", scene_num)
-                time.sleep(3 * (attempt + 1))
+            resp.raise_for_status()
+
+            sfx_path = sfx_dir / f"sfx_{scene_num:03d}.mp3"
+            sfx_path.write_bytes(resp.content)
+            sfx_results.append({
+                "scene_number": scene_num,
+                "path": str(sfx_path),
+                "prompt": sfx_prompt,
+            })
+            logger.info("SFX generated for scene %d", scene_num)
+        except Exception as e:
+            logger.warning("SFX generation failed for scene %d: %s, skipping", scene_num, str(e)[:100])
 
     logger.info("Generated %d SFX clips", len(sfx_results))
     return sfx_results
