@@ -1,7 +1,6 @@
-"""Video generation using Runway Gen-4.5 text-to-video.
+"""Video generation using Grok Imagine (xAI) text-to-video.
 
-Single-step pipeline: text prompt → video. No intermediate image generation.
-Gen-4.5 produces the highest quality hyperrealistic cinematic video.
+Uses the xAI REST API directly. No SDK needed.
 On credit exhaustion the module raises immediately — no placeholders.
 """
 
@@ -12,7 +11,6 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from runwayml import RunwayML
 
 import config
 
@@ -33,32 +31,78 @@ def _download_file(url: str, dest: Path, timeout: float = 180.0) -> Path:
 
 def _is_credit_error(exc: Exception) -> bool:
     err_str = str(exc).lower()
-    return any(kw in err_str for kw in ("credit", "insufficient", "quota", "billing"))
+    return any(kw in err_str for kw in ("credit", "insufficient", "quota", "billing", "rate_limit"))
+
+
+def _submit_video(prompt: str, duration: int) -> str:
+    """Submit a video generation request to xAI Grok Imagine. Returns request_id."""
+    config.check_api_key("XAI_API_KEY")
+
+    url = f"{config.XAI_VIDEO_BASE_URL}/videos/generations"
+    headers = {
+        "Authorization": f"Bearer {config.XAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": config.XAI_VIDEO_MODEL,
+        "prompt": prompt,
+        "duration": duration,
+        "aspect_ratio": config.XAI_VIDEO_ASPECT_RATIO,
+        "resolution": config.XAI_VIDEO_RESOLUTION,
+    }
+
+    with httpx.Client(timeout=60.0) as http:
+        resp = http.post(url, headers=headers, json=body)
+        resp.raise_for_status()
+        data = resp.json()
+
+    request_id = data.get("request_id") or data.get("id")
+    if not request_id:
+        raise RuntimeError(f"xAI returned no request_id: {data}")
+    return request_id
+
+
+def _poll_video(request_id: str, max_wait: int = 300, interval: int = 5) -> dict:
+    """Poll xAI until video is done. Returns the response dict with video URL."""
+    config.check_api_key("XAI_API_KEY")
+
+    url = f"{config.XAI_VIDEO_BASE_URL}/videos/{request_id}"
+    headers = {"Authorization": f"Bearer {config.XAI_API_KEY}"}
+
+    deadline = time.time() + max_wait
+    while time.time() < deadline:
+        with httpx.Client(timeout=30.0) as http:
+            resp = http.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+
+        status = data.get("status", "").lower()
+        if status == "done":
+            return data
+        if status in ("failed", "error"):
+            raise RuntimeError(f"xAI video generation failed: {data}")
+
+        logger.debug("xAI video %s status: %s", request_id, status)
+        time.sleep(interval)
+
+    raise TimeoutError(f"xAI video {request_id} did not complete within {max_wait}s")
 
 
 def generate_single_scene(scene: dict, output_dir) -> dict:
-    """Generate video for a single scene using gen4.5 text-to-video.
-
-    Args:
-        scene: Scene dict with scene_number, visual_prompt, duration_sec.
-        output_dir: Directory to store the video file.
+    """Generate video for a single scene using Grok Imagine.
 
     Returns:
         Dict with scene_number, video_path, status, duration.
-        On failure: includes "error" key.
 
     Raises:
-        RuntimeError: On credit exhaustion (fatal, never retry).
+        RuntimeError: On credit exhaustion (fatal).
     """
-    config.check_api_key("RUNWAY_API_KEY")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    client = RunwayML(api_key=config.RUNWAY_API_KEY)
-
     scene_num = scene.get("scene_number", 0)
     visual_prompt = scene.get("visual_prompt", "")
-    duration = min(scene.get("duration_sec", config.SCENE_DURATION_SEC), 10)
+    duration = scene.get("duration_sec", config.XAI_VIDEO_DURATION)
 
     if not visual_prompt:
         raise ValueError(f"Scene {scene_num} has no visual_prompt.")
@@ -70,23 +114,23 @@ def generate_single_scene(scene: dict, output_dir) -> dict:
         try:
             logger.info(
                 "Scene %d: generating video (attempt %d/%d, %d sec, model=%s)...",
-                scene_num, attempt, config.MAX_RETRIES, duration, config.RUNWAY_VIDEO_MODEL,
+                scene_num, attempt, config.MAX_RETRIES, duration, config.XAI_VIDEO_MODEL,
             )
 
-            task = client.text_to_video.create(
-                model=config.RUNWAY_VIDEO_MODEL,
-                prompt_text=visual_prompt,
-                ratio="1280:720",
-                duration=duration,
-            )
+            request_id = _submit_video(visual_prompt, duration)
+            logger.info("Scene %d: request_id=%s, polling...", scene_num, request_id)
 
-            logger.info("Scene %d: task %s created, waiting...", scene_num, task.id)
-            result = task.wait_for_task_output()
+            result = _poll_video(request_id)
 
-            if not result or not result.output or len(result.output) == 0:
-                raise RuntimeError(f"Video task {task.id} returned empty output.")
+            # Extract video URL from response
+            video_url = None
+            if "video" in result and isinstance(result["video"], dict):
+                video_url = result["video"].get("url")
+            if not video_url:
+                video_url = result.get("url") or result.get("output", [None])[0] if isinstance(result.get("output"), list) else None
+            if not video_url:
+                raise RuntimeError(f"No video URL in xAI response: {result}")
 
-            video_url = result.output[0]
             _download_file(video_url, video_path)
             logger.info("Scene %d: video saved to %s", scene_num, video_path)
 
@@ -100,8 +144,8 @@ def generate_single_scene(scene: dict, output_dir) -> dict:
         except Exception as exc:
             if _is_credit_error(exc):
                 raise RuntimeError(
-                    f"Runway credit exhaustion at scene {scene_num}: {exc}. "
-                    "Top up at https://app.runwayml.com."
+                    f"xAI credit exhaustion at scene {scene_num}: {exc}. "
+                    "Top up at https://console.x.ai"
                 ) from exc
 
             last_error = exc
@@ -124,17 +168,12 @@ def generate_single_scene(scene: dict, output_dir) -> dict:
 def generate_videos(scenes_data: dict, output_dir) -> dict:
     """Generate videos for all scenes.
 
-    Args:
-        scenes_data: Dict with "scenes" list.
-        output_dir: Base project output directory.
-
     Returns:
-        Dict with generated_scenes list (assembler-compatible), counts, status.
+        Dict with generated_scenes list, counts, status.
 
     Raises:
         RuntimeError: On credit exhaustion (stops immediately).
     """
-    config.check_api_key("RUNWAY_API_KEY")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -145,7 +184,7 @@ def generate_videos(scenes_data: dict, output_dir) -> dict:
     if not scenes:
         raise ValueError("scenes_data must contain a non-empty 'scenes' list.")
 
-    logger.info("Starting video generation for %d scene(s) with %s...", len(scenes), config.RUNWAY_VIDEO_MODEL)
+    logger.info("Starting video generation for %d scene(s) with %s...", len(scenes), config.XAI_VIDEO_MODEL)
 
     scene_results: list[dict] = []
     successful = 0
