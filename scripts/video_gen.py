@@ -16,6 +16,9 @@ import config
 
 logger = logging.getLogger(__name__)
 
+# xAI prompt character limit
+XAI_MAX_PROMPT_CHARS = 4096
+
 
 def _download_file(url: str, dest: Path, timeout: float = 180.0) -> Path:
     """Download a file from a URL to a local path."""
@@ -34,9 +37,25 @@ def _is_credit_error(exc: Exception) -> bool:
     return any(kw in err_str for kw in ("credit", "insufficient", "quota", "billing", "rate_limit"))
 
 
+def _truncate_prompt(prompt: str, max_chars: int = XAI_MAX_PROMPT_CHARS) -> str:
+    """Truncate prompt to fit xAI's character limit, cutting at sentence boundary."""
+    if len(prompt) <= max_chars:
+        return prompt
+    logger.warning("Prompt is %d chars, truncating to %d", len(prompt), max_chars)
+    truncated = prompt[:max_chars]
+    # Try to cut at last sentence boundary
+    last_period = truncated.rfind(".")
+    if last_period > max_chars - 300:
+        truncated = truncated[:last_period + 1]
+    return truncated
+
+
 def _submit_video(prompt: str, duration: int) -> str:
     """Submit a video generation request to xAI Grok Imagine. Returns request_id."""
     config.check_api_key("XAI_API_KEY")
+
+    # Safety: truncate if over limit
+    prompt = _truncate_prompt(prompt)
 
     url = f"{config.XAI_VIDEO_BASE_URL}/videos/generations"
     headers = {
@@ -51,6 +70,7 @@ def _submit_video(prompt: str, duration: int) -> str:
         "resolution": config.XAI_VIDEO_RESOLUTION,
     }
 
+    logger.info("Submitting video: %d char prompt, %d sec duration", len(prompt), duration)
     with httpx.Client(timeout=60.0) as http:
         resp = http.post(url, headers=headers, json=body)
         resp.raise_for_status()
@@ -123,8 +143,8 @@ def generate_single_scene(scene: dict, output_dir) -> dict:
     for attempt in range(1, config.MAX_RETRIES + 1):
         try:
             logger.info(
-                "Scene %d: generating video (attempt %d/%d, %d sec, model=%s)...",
-                scene_num, attempt, config.MAX_RETRIES, duration, config.XAI_VIDEO_MODEL,
+                "Scene %d: generating video (attempt %d/%d, %d sec, model=%s, prompt=%d chars)...",
+                scene_num, attempt, config.MAX_RETRIES, duration, config.XAI_VIDEO_MODEL, len(visual_prompt),
             )
 
             request_id = _submit_video(visual_prompt, duration)
