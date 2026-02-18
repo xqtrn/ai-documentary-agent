@@ -191,6 +191,8 @@ def _generate_grok_video(prompt: str, duration: int, video_path: Path, engine_cf
 
     with httpx.Client(timeout=60.0) as http:
         resp = http.post(f"{base_url}/videos/generations", headers=headers, json=body)
+        if resp.status_code >= 400:
+            logger.error("Grok API error %d: %s", resp.status_code, resp.text[:500])
         resp.raise_for_status()
         data = resp.json()
 
