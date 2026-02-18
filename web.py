@@ -1127,6 +1127,8 @@ async def test_generate(body: GenerateRequest):
         try:
             if mode == "analysis":
                 run_analysis(url)
+            elif mode == "fresh":
+                run_pipeline(url, resume=False)
             else:
                 run_pipeline(url)
         except Exception as e:
