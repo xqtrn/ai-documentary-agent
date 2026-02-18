@@ -15,8 +15,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Cache bust: change this value to force a fresh COPY
-ARG CACHEBUST=5
+# Force no-cache rebuild: 1771391683
+RUN echo "rebuild-1771391683"
 COPY . .
 
 # Create output and data directories
