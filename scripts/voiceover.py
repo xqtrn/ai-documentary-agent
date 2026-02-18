@@ -135,7 +135,7 @@ def generate_voiceover(script_text: str, output_dir) -> Path:
                 prompt_text=chunk_text,
                 voice={
                     "type": "runway-preset",
-                    "preset_id": config.RUNWAY_TTS_VOICE,
+                    "presetId": config.RUNWAY_TTS_VOICE,
                 },
             )
         except Exception as exc:
