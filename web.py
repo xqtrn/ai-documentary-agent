@@ -1153,7 +1153,7 @@ async def test_generate(body: GenerateRequest):
             elif mode == "fresh":
                 run_pipeline(url, resume=False, engine=engine, video_id=video_id)
             else:
-                run_pipeline(url, engine=engine)
+                run_pipeline(url, engine=engine, video_id=video_id)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
@@ -1328,7 +1328,7 @@ async def auth_generate(request: Request, body: AuthGenerateRequest):
             elif mode == "fresh":
                 run_pipeline(url, resume=False, engine=engine, video_id=video_id)
             else:
-                run_pipeline(url, engine=engine)
+                run_pipeline(url, engine=engine, video_id=video_id)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
