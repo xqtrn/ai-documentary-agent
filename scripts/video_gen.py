@@ -1,194 +1,206 @@
-"""Step 5: Generate video clips using Runway SDK.
+"""Video generation using Runway Gen-4.5 text-to-video.
 
-No placeholders — if Runway credits run out, the pipeline stops with a clear error.
+Single-step pipeline: text prompt → video. No intermediate image generation.
+Gen-4.5 produces the highest quality hyperrealistic cinematic video.
+On credit exhaustion the module raises immediately — no placeholders.
 """
 
 import json
 import logging
 import time
 from pathlib import Path
+from typing import Optional
 
 import httpx
+from runwayml import RunwayML
 
 import config
 
 logger = logging.getLogger(__name__)
 
-MAX_PROMPT_LENGTH = 950  # Runway limit is 1000, leave buffer
+
+def _download_file(url: str, dest: Path, timeout: float = 180.0) -> Path:
+    """Download a file from a URL to a local path."""
+    logger.info("Downloading %s -> %s", url, dest)
+    with httpx.Client(timeout=timeout, follow_redirects=True) as http:
+        resp = http.get(url)
+        resp.raise_for_status()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(resp.content)
+    logger.info("Downloaded %d bytes to %s", dest.stat().st_size, dest)
+    return dest
 
 
-def _truncate_prompt(prompt: str, max_len: int = MAX_PROMPT_LENGTH) -> str:
-    """Truncate prompt to max length, keeping the no-text suffix."""
-    suffix = " no text, no letters, no words, no subtitles, no signs, no writing, no numbers, no captions"
-    if len(prompt) <= max_len:
-        return prompt
-    available = max_len - len(suffix) - 2
-    truncated = prompt[:available].rsplit(".", 1)[0]
-    if not truncated:
-        truncated = prompt[:available]
-    return truncated + "." + suffix
+def _is_credit_error(exc: Exception) -> bool:
+    err_str = str(exc).lower()
+    return any(kw in err_str for kw in ("credit", "insufficient", "quota", "billing"))
 
 
-def _is_credits_error(error_str: str) -> bool:
-    """Check if an error is due to exhausted Runway credits."""
-    lower = error_str.lower()
-    return any(phrase in lower for phrase in [
-        "not have enough credits",
-        "insufficient credits",
-        "credits exhausted",
-        "quota exceeded",
-    ])
+def generate_single_scene(scene: dict, output_dir) -> dict:
+    """Generate video for a single scene using gen4.5 text-to-video.
 
+    Args:
+        scene: Scene dict with scene_number, visual_prompt, duration_sec.
+        output_dir: Directory to store the video file.
 
-def generate_image_runway(client, prompt: str, scene_num: int, output_dir: Path) -> tuple:
-    """Generate a reference image using Runway text_to_image."""
-    import runwayml
+    Returns:
+        Dict with scene_number, video_path, status, duration.
+        On failure: includes "error" key.
 
-    full_prompt = _truncate_prompt(
-        f"{prompt}. Photorealistic, cinematic, high detail. "
-        "no text, no letters, no words, no subtitles, no signs, no writing, no numbers, no captions"
-    )
-    logger.info("Scene %d image prompt (%d chars): %s", scene_num, len(full_prompt), full_prompt[:100] + "...")
+    Raises:
+        RuntimeError: On credit exhaustion (fatal, never retry).
+    """
+    config.check_api_key("RUNWAY_API_KEY")
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    task = client.text_to_image.create(
-        model="gen4_image",
-        prompt_text=full_prompt,
-        ratio="1280:720",
-    )
-    task_id = task.id
-    logger.info("Scene %d image task created: %s", scene_num, task_id)
+    client = RunwayML(api_key=config.RUNWAY_API_KEY)
 
-    try:
-        result = task.wait_for_task_output()
-    except runwayml.TaskFailedError as e:
-        raise RuntimeError(f"Runway image task failed: {e}")
-    except runwayml.TaskTimeoutError:
-        raise TimeoutError(f"Runway image task {task_id} timed out")
+    scene_num = scene.get("scene_number", 0)
+    visual_prompt = scene.get("visual_prompt", "")
+    duration = min(scene.get("duration_sec", config.SCENE_DURATION_SEC), 10)
 
-    image_url = result.output[0]
-
-    image_path = output_dir / f"scene_{scene_num:03d}.png"
-    resp = httpx.get(image_url, timeout=120)
-    resp.raise_for_status()
-    image_path.write_bytes(resp.content)
-    logger.info("Scene %d image saved: %s (%d bytes)", scene_num, image_path, len(resp.content))
-    return image_path, image_url
-
-
-def generate_video_runway(client, image_url: str, prompt: str, scene_num: int, duration: int, output_dir: Path) -> Path:
-    """Generate video clip from reference image using Runway image_to_video."""
-    import runwayml
-
-    full_prompt = _truncate_prompt(
-        f"{prompt}. Smooth cinematic motion, photorealistic. "
-        "no text, no letters, no words, no subtitles, no signs"
-    )
-    logger.info("Scene %d video prompt (%d chars)", scene_num, len(full_prompt))
-
-    task = client.image_to_video.create(
-        model="gen4_turbo",
-        prompt_image=image_url,
-        prompt_text=full_prompt,
-        duration=min(duration, 10),
-        ratio="1280:720",
-    )
-    task_id = task.id
-    logger.info("Scene %d video task created: %s", scene_num, task_id)
-
-    try:
-        result = task.wait_for_task_output()
-    except runwayml.TaskFailedError as e:
-        raise RuntimeError(f"Runway video task failed: {e}")
-    except runwayml.TaskTimeoutError:
-        raise TimeoutError(f"Runway video task {task_id} timed out")
-
-    video_url = result.output[0]
+    if not visual_prompt:
+        raise ValueError(f"Scene {scene_num} has no visual_prompt.")
 
     video_path = output_dir / f"scene_{scene_num:03d}.mp4"
-    resp = httpx.get(video_url, timeout=120)
-    resp.raise_for_status()
-    video_path.write_bytes(resp.content)
-    logger.info("Scene %d video saved: %s (%d bytes)", scene_num, video_path, len(resp.content))
-    return video_path
 
-
-def process_scene(client, scene: dict, images_dir: Path, videos_dir: Path) -> dict:
-    """Process a single scene: generate image then video via Runway."""
-    num = scene["scene_number"]
-    prompt = scene["visual_prompt"]
-    camera = scene.get("camera", "")
-    lighting = scene.get("lighting", "")
-    full_prompt = f"{prompt}. Camera: {camera}. Lighting: {lighting}"
-    duration = scene.get("duration_sec", 10)
-
-    logger.info("Processing scene %d...", num)
-
-    last_error = None
-    for attempt in range(config.MAX_RETRIES):
+    last_error: Optional[Exception] = None
+    for attempt in range(1, config.MAX_RETRIES + 1):
         try:
-            image_path, image_url = generate_image_runway(client, full_prompt, num, images_dir)
-            video_path = generate_video_runway(client, image_url, full_prompt, num, duration, videos_dir)
-            return {
-                "scene_number": num,
-                "image_path": str(image_path),
-                "video_path": str(video_path),
-                "duration_sec": duration,
-                "source": "runway",
-            }
-        except Exception as e:
-            last_error = str(e)
-            if _is_credits_error(last_error):
-                raise RuntimeError(
-                    f"Runway credits exhausted! Cannot generate scene {num}. "
-                    f"Please add more credits at https://dev.runwayml.com. Error: {last_error}"
-                )
-            logger.warning("Scene %d attempt %d/%d failed: %s", num, attempt + 1, config.MAX_RETRIES, last_error[:200])
-            if attempt < config.MAX_RETRIES - 1:
-                time.sleep(10 * (attempt + 1))
+            logger.info(
+                "Scene %d: generating video (attempt %d/%d, %d sec, model=%s)...",
+                scene_num, attempt, config.MAX_RETRIES, duration, config.RUNWAY_VIDEO_MODEL,
+            )
 
-    # All retries exhausted for this scene
-    logger.error("Scene %d failed after %d attempts: %s", num, config.MAX_RETRIES, last_error)
+            task = client.text_to_video.create(
+                model=config.RUNWAY_VIDEO_MODEL,
+                prompt_text=visual_prompt,
+                ratio="1280:720",
+                duration=duration,
+            )
+
+            logger.info("Scene %d: task %s created, waiting...", scene_num, task.id)
+            result = task.wait_for_task_output()
+
+            if not result or not result.output or len(result.output) == 0:
+                raise RuntimeError(f"Video task {task.id} returned empty output.")
+
+            video_url = result.output[0]
+            _download_file(video_url, video_path)
+            logger.info("Scene %d: video saved to %s", scene_num, video_path)
+
+            return {
+                "scene_number": scene_num,
+                "video_path": str(video_path),
+                "status": "success",
+                "duration": duration,
+            }
+
+        except Exception as exc:
+            if _is_credit_error(exc):
+                raise RuntimeError(
+                    f"Runway credit exhaustion at scene {scene_num}: {exc}. "
+                    "Top up at https://app.runwayml.com."
+                ) from exc
+
+            last_error = exc
+            logger.warning(
+                "Scene %d attempt %d/%d failed: %s",
+                scene_num, attempt, config.MAX_RETRIES, exc,
+            )
+            if attempt < config.MAX_RETRIES:
+                time.sleep(2 ** attempt)
+
+    logger.error("Scene %d failed after %d retries: %s", scene_num, config.MAX_RETRIES, last_error)
     return {
-        "scene_number": num,
-        "duration_sec": duration,
-        "error": last_error,
-        "source": "failed",
+        "scene_number": scene_num,
+        "video_path": None,
+        "status": "failed",
+        "error": str(last_error),
     }
 
 
-def generate_videos(scenes_data: dict, output_dir: Path) -> dict:
-    """Generate all scene videos using Runway."""
-    images_dir = output_dir / "images"
+def generate_videos(scenes_data: dict, output_dir) -> dict:
+    """Generate videos for all scenes.
+
+    Args:
+        scenes_data: Dict with "scenes" list.
+        output_dir: Base project output directory.
+
+    Returns:
+        Dict with generated_scenes list (assembler-compatible), counts, status.
+
+    Raises:
+        RuntimeError: On credit exhaustion (stops immediately).
+    """
+    config.check_api_key("RUNWAY_API_KEY")
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     videos_dir = output_dir / "videos"
-    images_dir.mkdir(parents=True, exist_ok=True)
     videos_dir.mkdir(parents=True, exist_ok=True)
 
-    scenes = scenes_data["scenes"]
-    results = []
+    scenes = scenes_data.get("scenes", [])
+    if not scenes:
+        raise ValueError("scenes_data must contain a non-empty 'scenes' list.")
 
-    # Initialize Runway client — fail early if SDK missing or key invalid
-    import runwayml
-    client = runwayml.RunwayML(api_key=config.RUNWAY_API_KEY)
-    logger.info("Runway client initialized, processing %d scenes...", len(scenes))
+    logger.info("Starting video generation for %d scene(s) with %s...", len(scenes), config.RUNWAY_VIDEO_MODEL)
 
-    for scene in scenes:
-        result = process_scene(client, scene, images_dir, videos_dir)
-        results.append(result)
+    scene_results: list[dict] = []
+    successful = 0
+    failed = 0
 
-    successful = [r for r in results if r.get("source") == "runway"]
-    failed = [r for r in results if "error" in r]
+    for i, scene in enumerate(scenes):
+        scene_num = scene.get("scene_number", i + 1)
+        logger.info("Processing scene %d/%d (scene_number=%d)...", i + 1, len(scenes), scene_num)
 
-    result = {
-        "generated_scenes": results,
+        try:
+            result = generate_single_scene(scene, videos_dir)
+        except RuntimeError as exc:
+            if "credit" in str(exc).lower():
+                logger.error("Credit exhaustion at scene %d — stopping.", scene_num)
+                scene_results.append({
+                    "scene_number": scene_num,
+                    "video_path": None,
+                    "error": str(exc),
+                })
+                failed += 1
+
+                output = {
+                    "generated_scenes": scene_results,
+                    "total_scenes": len(scenes),
+                    "successful": successful,
+                    "failed": failed,
+                    "status": "credit_exhausted",
+                }
+                step_file = output_dir / "step5_videos.json"
+                step_file.write_text(json.dumps(output, indent=2))
+                raise
+            raise
+
+        scene_results.append(result)
+        if result.get("status") == "success":
+            successful += 1
+        else:
+            failed += 1
+
+    status = "success" if failed == 0 else ("partial" if successful > 0 else "failed")
+    logger.info(
+        "Video generation complete: %d/%d successful. Status: %s",
+        successful, len(scenes), status,
+    )
+
+    output = {
+        "generated_scenes": scene_results,
         "total_scenes": len(scenes),
-        "successful": len(successful),
-        "failed": len(failed),
-        "runway_scenes": len(successful),
+        "successful": successful,
+        "failed": failed,
+        "status": status,
     }
 
-    with open(output_dir / "step5_videos.json", "w") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+    step_file = output_dir / "step5_videos.json"
+    step_file.write_text(json.dumps(output, indent=2))
+    logger.info("Video step result saved to %s", step_file)
 
-    logger.info("Video generation complete: %d/%d successful (%d failed)",
-                len(successful), len(scenes), len(failed))
-    return result
+    return output
