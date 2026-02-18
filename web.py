@@ -1140,7 +1140,7 @@ async def test_generate(body: GenerateRequest):
 
     # Compute video_id — unique per engine for fresh mode
     base_video_id = _extract_video_id(url)
-    if mode == "fresh" and engine != config.DEFAULT_ENGINE:
+    if engine != config.DEFAULT_ENGINE:
         suffix = engine.replace("-", "_").replace(".", "")
         video_id = f"{base_video_id}_{suffix}"
     else:
@@ -1315,7 +1315,7 @@ async def auth_generate(request: Request, body: AuthGenerateRequest):
 
     # Compute video_id — unique per engine for fresh mode
     base_video_id = _extract_video_id(url)
-    if mode == "fresh" and engine != config.DEFAULT_ENGINE:
+    if engine != config.DEFAULT_ENGINE:
         suffix = engine.replace("-", "_").replace(".", "")
         video_id = f"{base_video_id}_{suffix}"
     else:
