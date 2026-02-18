@@ -1,29 +1,39 @@
 import os
 
-# API Keys — Only Runway + Anthropic needed
+# API Keys
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 RUNWAY_API_KEY = os.environ.get("RUNWAY_API_KEY", "")
+XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "ai_documentary_bot")
 
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./output")
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
 
-# Models — ALWAYS use the best available
+# Models
 CLAUDE_MODEL = "claude-opus-4-6"
-RUNWAY_VIDEO_MODEL = "gen4.5"                    # Best quality: 12 credits/sec
-RUNWAY_TTS_MODEL = "eleven_multilingual_v2"      # via Runway API: 1 credit/50 chars
-RUNWAY_MUSIC_MODEL = "eleven_text_to_sound_v2"   # via Runway API: 1 credit/6 sec
+
+# VIDEO — Grok Imagine (xAI)
+XAI_VIDEO_MODEL = "grok-imagine-video"
+XAI_VIDEO_BASE_URL = "https://api.x.ai/v1"
+XAI_VIDEO_DURATION = 8
+XAI_VIDEO_ASPECT_RATIO = "16:9"
+XAI_VIDEO_RESOLUTION = "720p"
+
+# VOICEOVER — ElevenLabs via Runway API
+RUNWAY_TTS_MODEL = "eleven_multilingual_v2"
+RUNWAY_TTS_VOICE = "James"
 RUNWAY_BASE_URL = "https://api.dev.runwayml.com/v1"
+RUNWAY_API_VERSION = "2024-11-06"
 
-# TTS voice — natural documentary narrator
-RUNWAY_TTS_VOICE = "Mark"
+# MUSIC & SFX — Runway Sound Effects
+RUNWAY_MUSIC_MODEL = "eleven_text_to_sound_v2"
 
-# Scene config — quality over quantity
-TARGET_DURATION_MIN = 0.5  # 30 sec
-TARGET_DURATION_MAX = 1    # 60 sec
-SCENE_DURATION_SEC = 10
-SCENES_COUNT_MIN = 3
+# Scene config
+TARGET_DURATION_MIN = 0.5
+TARGET_DURATION_MAX = 1
+SCENE_DURATION_SEC = 8
+SCENES_COUNT_MIN = 4
 SCENES_COUNT_MAX = 4
 
 MAX_RETRIES = 3
