@@ -504,7 +504,7 @@ async function loadProjects() {
       var state = p.state || p.status || "idle";
       var step = p.current_step || p.step || "";
       var eng = p.engine || "";
-      return '<div class="project-item" onclick="window.location.href=projectUrl(\'' + vid + '\')">' +
+      return '<div class="project-item" onclick="window.location.href=projectUrl(\\'' + vid + '\\')">' +
         '<div class="info">' +
           '<div class="title">' + escHtml(title) + '</div>' +
           '<div class="meta">' + escHtml(vid) + (eng ? " \u00b7 " + escHtml(eng) : "") + (step ? " \u2014 " + escHtml(step) : "") + '</div>' +
@@ -536,9 +536,9 @@ async function loadHistory() {
       var date = h.created_at ? h.created_at.split("T")[0] : "";
       var thumbSrc = h.thumbnail ? fileUrl(vid + "/thumbnail.jpg") : "";
       var thumbHtml = thumbSrc
-        ? '<img class="history-thumb" src="' + thumbSrc + '" alt="" loading="lazy" onerror="this.style.background=\'#1a1a24\';this.alt=\'No thumbnail\'">'
+        ? '<img class="history-thumb" src="' + thumbSrc + '" alt="" loading="lazy" onerror="this.style.background=\\'#1a1a24\\';this.alt=\\'No thumbnail\\'">'
         : '<div class="history-thumb" style="background:#1a1a24;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px">No thumbnail</div>';
-      return '<div class="history-card" onclick="window.location.href=projectUrl(\'' + vid + '\')">' +
+      return '<div class="history-card" onclick="window.location.href=projectUrl(\\'' + vid + '\\')">' +
         thumbHtml +
         '<div class="history-body">' +
           '<div class="history-title">' + escHtml(title) + '</div>' +
