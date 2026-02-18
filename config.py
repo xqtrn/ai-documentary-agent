@@ -55,7 +55,7 @@ ENGINE_CONFIG = {
         "max_duration_sec": 20,
         "has_native_audio": False,
         "cost_per_sec": 0,
-        "resolution": "1920x1080",
+        "resolution": "1792x1024",
     },
     "sora-2": {
         "provider": "openai",
@@ -66,7 +66,7 @@ ENGINE_CONFIG = {
         "max_duration_sec": 20,
         "has_native_audio": False,
         "cost_per_sec": 0,
-        "resolution": "1920x1080",
+        "resolution": "1792x1024",
     },
     "gen4.5": {
         "provider": "runway",
