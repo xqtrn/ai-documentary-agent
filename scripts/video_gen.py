@@ -112,7 +112,10 @@ def _generate_sora_video(prompt: str, duration: int, video_path: Path, engine_cf
 
     with httpx.Client(timeout=60.0) as http:
         resp = http.post(f"{base_url}/videos", headers=headers, json=create_body)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            error_body = resp.text[:500]
+            logger.error("Sora API error %d: %s", resp.status_code, error_body)
+            raise RuntimeError(f"Sora API {resp.status_code}: {error_body}")
         data = resp.json()
 
     video_id = data.get("id")
