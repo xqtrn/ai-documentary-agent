@@ -7,6 +7,5 @@ fastapi>=0.115.0
 uvicorn>=0.32.0
 python-jose[cryptography]>=3.3.0
 requests>=2.31.0
-# runwayml SDK no longer needed for video gen (using xAI REST API)
-# but still needed for TTS and Sound Effects
 runwayml>=4.0.0
+openai>=1.0.0
