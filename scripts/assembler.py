@@ -20,6 +20,25 @@ def get_video_duration(path: str) -> float:
     return float(result.stdout.strip())
 
 
+def _generate_thumbnail(video_path: str, output_dir: Path) -> str:
+    """Generate a thumbnail from the final video at 2 seconds."""
+    thumb_path = output_dir / "thumbnail.jpg"
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", video_path,
+        "-ss", "2",
+        "-vframes", "1",
+        "-q:v", "2",
+        str(thumb_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        logger.warning("Thumbnail generation failed: %s", result.stderr[:200])
+        return ""
+    logger.info("Thumbnail generated: %s", thumb_path)
+    return str(thumb_path)
+
+
 def assemble_video(
     scenes_data: dict,
     video_data: dict,
@@ -47,10 +66,8 @@ def assemble_video(
     crossfade_duration = 0.5
 
     if len(video_paths) == 1:
-        # Single clip, just copy
         concat_video = video_paths[0]
     else:
-        # Create crossfade chain
         concat_video = str(output_dir / "concat_video.mp4")
         _concat_with_crossfade(video_paths, concat_video, crossfade_duration)
 
@@ -58,15 +75,13 @@ def assemble_video(
     voiceover_path = audio_data["voiceover_path"]
     music_path = music_data["music_path"]
 
-    # Step 3: Mix audio - voiceover at full volume, music at -15dB
+    # Step 3: Mix audio
     mixed_audio = str(output_dir / "mixed_audio.mp3")
     _mix_audio(voiceover_path, music_path, audio_data.get("sfx", []), mixed_audio, output_dir)
 
     # Step 4: Combine video + mixed audio
     voiceover_duration = get_video_duration(voiceover_path)
     video_duration = get_video_duration(concat_video)
-
-    # Use the shorter of voiceover or video as final duration
     target_duration = min(voiceover_duration, video_duration)
 
     cmd = [
@@ -96,6 +111,9 @@ def assemble_video(
     final_duration = get_video_duration(str(final_path))
     file_size_mb = final_path.stat().st_size / (1024 * 1024)
 
+    # Generate thumbnail
+    thumbnail_path = _generate_thumbnail(str(final_path), output_dir)
+
     assembly_result = {
         "final_video": str(final_path),
         "duration_sec": final_duration,
@@ -103,6 +121,7 @@ def assemble_video(
         "resolution": "1920x1080",
         "fps": 24,
         "clips_used": len(generated),
+        "thumbnail": thumbnail_path,
     }
 
     with open(output_dir / "step8_assembly.json", "w") as f:
@@ -119,17 +138,14 @@ def assemble_video(
 
 def _concat_with_crossfade(video_paths: list, output: str, crossfade_sec: float):
     """Concatenate videos with crossfade transitions."""
-    # For many clips, use simple concat (crossfade filter graph gets too complex)
     if len(video_paths) > 20:
         _simple_concat(video_paths, output)
         return
 
-    # Build FFmpeg filter graph for crossfade
     inputs = []
     for i, p in enumerate(video_paths):
         inputs.extend(["-i", p])
 
-    # Build xfade filter chain
     filter_parts = []
     current = "[0:v]"
     for i in range(1, len(video_paths)):
@@ -164,7 +180,7 @@ def _concat_with_crossfade(video_paths: list, output: str, crossfade_sec: float)
 
 
 def _simple_concat(video_paths: list, output: str):
-    """Simple concatenation without crossfade for large numbers of clips."""
+    """Simple concatenation without crossfade."""
     import tempfile
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         for p in video_paths:
@@ -193,21 +209,18 @@ def _get_clip_duration(path: str) -> float:
 
 def _mix_audio(voiceover: str, music: str, sfx_list: list, output: str, output_dir: Path):
     """Mix voiceover (full volume) + music (-15dB) + SFX."""
-    # Start with voiceover + music
     inputs = ["-i", voiceover, "-i", music]
     filter_parts = [
         "[0:a]volume=1.0[voice]",
-        "[1:a]volume=0.18[music]",  # -15dB ~ 0.18
+        "[1:a]volume=0.18[music]",
     ]
 
     if sfx_list:
-        # Add SFX inputs
         for i, sfx in enumerate(sfx_list):
             inputs.extend(["-i", sfx["path"]])
             sfx_idx = i + 2
             filter_parts.append(f"[{sfx_idx}:a]volume=0.5[sfx{i}]")
 
-        # Mix all together
         mix_inputs = "[voice][music]" + "".join(f"[sfx{i}]" for i in range(len(sfx_list)))
         filter_parts.append(f"{mix_inputs}amix=inputs={2 + len(sfx_list)}:duration=first[out]")
     else:
