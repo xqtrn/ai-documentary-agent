@@ -395,7 +395,7 @@ def run_pipeline(url: str, *, resume: bool = True, engine: str = None, video_id:
             logger.info("Step 6/9: Audio — loaded from checkpoint.")
         results["audio"] = audio_data
 
-        # Step 7 — Music
+        # Step 7 — Music (optional: continues to assembly if 429/rate-limited)
         _check_cancel()
         write_status(step="music", step_number=7, message="Generating background music…", progress=66.0)
         music_data = load_step_data(output_dir, STEP_FILES["music"]) if resume else None
@@ -404,8 +404,17 @@ def run_pipeline(url: str, *, resume: bool = True, engine: str = None, video_id:
             total_duration = sum(
                 s.get("duration_sec", s.get("duration", 10)) for s in scenes_data.get("scenes", [])
             )
-            music_data = generate_music(total_duration, output_dir, scenes=scenes_data.get("scenes", []))
-            save_checkpoint(output_dir, STEP_FILES["music"], music_data)
+            try:
+                music_data = generate_music(total_duration, output_dir, scenes=scenes_data.get("scenes", []))
+                save_checkpoint(output_dir, STEP_FILES["music"], music_data)
+            except Exception as music_exc:
+                err_str = str(music_exc).lower()
+                if any(kw in err_str for kw in ("429", "rate", "limit", "daily", "quota")):
+                    logger.warning("Step 7/9: Music skipped (rate-limited): %s", music_exc)
+                    music_data = {"music_path": None, "skipped": True, "reason": str(music_exc)}
+                    save_checkpoint(output_dir, STEP_FILES["music"], music_data)
+                else:
+                    raise
         else:
             logger.info("Step 7/9: Music — loaded from checkpoint.")
         results["music"] = music_data
@@ -610,7 +619,7 @@ def assemble_project(video_id: str) -> dict:
     if scenes_data is None: missing.append("scenes (step 4)")
     if video_data is None: missing.append("video (step 5)")
     if audio_data is None: missing.append("audio (step 6)")
-    if music_data is None: missing.append("music (step 7)")
+    # Music is optional — assembly can proceed with voiceover only
     if missing:
         raise FileNotFoundError(f"Missing data for assembly: {', '.join(missing)}")
 
