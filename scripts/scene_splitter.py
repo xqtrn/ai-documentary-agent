@@ -11,50 +11,115 @@ import config
 
 logger = logging.getLogger(__name__)
 
-SCENE_SPLIT_PROMPT = """You are a world-class cinematic director creating prompts for Grok Imagine, xAI's video generation model. Your goal: every scene must look like a real Hollywood film.
+SCENE_SPLIT_PROMPT = """You are a world-class cinematic director and DP (Director of Photography) creating prompts for Grok Imagine, xAI's text-to-video AI model. Your goal: every scene must look indistinguishable from a real Hollywood film shot on ARRI Alexa 65.
 
 SCRIPT:
 {script}
 
-TASK: Break this script into EXACTLY {scene_count} scenes, each 8 seconds long. You MUST output exactly {scene_count} scenes — no more, no fewer.
+TASK: Break this script into EXACTLY {scene_count} scenes, each 8 seconds long. You MUST output exactly {scene_count} scenes — no more, no fewer. Distribute ALL narration evenly across the scenes.
 
 For each scene provide:
-1. **scene_number**: Sequential number
+1. **scene_number**: Sequential number (1 through {scene_count})
 2. **narration**: The exact narration text for this scene
-3. **visual_prompt**: A cinematic video prompt (MAX 500 characters, see rules below)
-4. **camera**: Specific camera movement
-5. **lighting**: Specific lighting
+3. **visual_prompt**: An EXTREMELY DETAILED cinematic video prompt (see rules below — NO character limit, write as much as needed)
+4. **camera**: Specific camera movement description
+5. **lighting**: Specific lighting setup
 6. **mood**: Emotional mood for music/SFX
-7. **sfx_prompt**: Sound effect description (MUST avoid violent/graphic language — use atmospheric sounds only: crowd murmur, wind, rain, bells, footsteps, crackling fire, distant drums)
+7. **sfx_prompt**: Sound effect description (atmospheric sounds ONLY — see SFX rules below)
 8. **duration_sec**: 8
 
-VISUAL PROMPT RULES (MAX 500 CHARACTERS EACH):
-- Style: "Hyperrealistic cinematic 4K, shot on ARRI Alexa 65, anamorphic lens"
-- NEVER: "painting", "illustration", "animated", "cartoon", "artistic"
-- Every scene MUST have motion: crowds moving, flags waving, smoke rising, flames flickering
-- Include camera movement: drone, tracking, crane, steadicam
-- Include period-accurate costumes and architecture
-- Scene 1 MUST be an epic aerial establishing shot
-- End every prompt with: "no text, no letters, no words, no subtitles, no watermark"
-- Keep prompts CONCISE — under 500 characters. Grok works better with focused prompts.
+═══════════════════════════════════════════════════════════════
+VISUAL PROMPT RULES — WRITE LIKE A PROFESSIONAL FILM DIRECTOR
+═══════════════════════════════════════════════════════════════
 
-SFX PROMPT RULES:
-- Describe atmospheric ambient sounds only
+There is NO character limit on visual prompts. Write each prompt like a professional film screenplay / director's shot list. More detail = more control = better result. Each prompt should read like instructions given to EVERY department on a film set.
+
+For EACH visual prompt, include ALL of the following:
+
+**DIRECTOR'S VISION:**
+- Overall mood and atmosphere of the scene
+- Emotional tone: tension, fear, triumph, despair, hope, awe
+- Pacing: frantic chaos or slow building tension
+- What the viewer should FEEL in this moment
+
+**CINEMATOGRAPHER (Camera & Lens):**
+- Camera and lens: "ARRI Alexa 65, 40mm anamorphic lens, T2.0"
+- Camera movement: steadicam tracking, dolly push-in, crane descending, handheld shaky, drone aerial
+- Camera height: eye level, low angle looking up, bird's eye overhead
+- Depth of field: shallow DOF with blurred background, or deep focus
+- Start and end position of camera movement
+
+**LIGHTING / GAFFER:**
+- Time of day: dawn, midday, sunset, night, twilight
+- Light source: natural sun, candles, torches, fireplace, overcast sky
+- Light direction: backlit, side-lit, front-lit, from below
+- Color temperature: warm golden, cool bluish, neutral
+- Shadows: hard contrasty or soft diffused
+- Special lighting: god rays through clouds, flame flicker, reflections on wet cobblestones
+
+**COSTUME DESIGN:**
+- Precise clothing description for EVERY visible character
+- Materials and textures: "rough undyed linen", "worn velvet", "soot-stained leather apron"
+- Clothing condition: new/worn, clean/dirty, torn/intact
+- Historical details: tricorn hats, wigs, stockings, clogs, revolutionary cockades
+- Accessories: belts, buckles, hats, scarves, weapons
+
+**MAKEUP & HAIR:**
+- Faces: clean/dirty, sweaty, sooty, scarred
+- Hair: neat/disheveled, wigs, loose
+- Age and condition: wrinkles, hollow cheeks, bags under eyes from exhaustion
+- Skin texture and detail
+
+**ACTORS / PERFORMANCE:**
+- Facial expressions: "clenched jaws, narrowed eyes, nostrils flared with rage"
+- Body language: "hunched shoulders, arms clutched to chest" or "chest out, chin raised"
+- Specific actions: what each visible person is doing in frame
+- Gaze direction: looking at camera, to the side, upward, at another character
+- Crowd behavior: unified movement, scattered panic, silent stillness
+
+**PRODUCTION DESIGN (Location & Set):**
+- Detailed location description: architecture, wall materials, floor, ceiling
+- Props: furniture, items on tables, food, weapons, tools
+- Space condition: clean/cluttered, intact/destroyed
+- Scale: cramped room or massive square with thousands of people
+- Period-accurate 18th century French details
+
+**ATMOSPHERE & VFX:**
+- Weather: rain, fog, snow, wind, heat haze
+- Particles in air: dust, smoke, ash, sparks, raindrops
+- Fire, explosions, destruction if present
+- Crowd size: "dozens", "hundreds", "thousands filling the square wall to wall"
+
+**NEGATIVE CONSTRAINTS (MANDATORY at end of EVERY prompt):**
+"no text, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no title cards, no credits, no captions"
+
+**STYLE CONSTRAINTS (MANDATORY in EVERY prompt):**
+- ALWAYS: "Hyperrealistic cinematic 4K footage"
+- NEVER use: "painting", "illustration", "animated", "cartoon", "artistic", "stylized"
+- Every scene MUST have significant motion
+- Scene 1 MUST be an epic aerial establishing shot
+
+═══════════════════════════════════════════════════════════════
+SFX PROMPT RULES
+═══════════════════════════════════════════════════════════════
+- Describe atmospheric ambient sounds ONLY
 - Be specific: "large crowd murmuring, distant church bells, horse hooves on cobblestone"
 - NEVER include graphic/violent descriptions — content moderation will block them
-- Focus on: wind, rain, fire crackling, crowd murmur, bells, footsteps, drums, nature sounds
+- Focus on: wind, rain, fire crackling, crowd murmur, bells, footsteps, drums, nature sounds, fabric rustling, wood creaking
 
-CRITICAL: Output EXACTLY {scene_count} scene objects. Distribute the narration evenly across all {scene_count} scenes.
+═══════════════════════════════════════════════════════════════
 
-OUTPUT FORMAT: Return ONLY a JSON array, no markdown code blocks.
+CRITICAL: Output EXACTLY {scene_count} scene objects. No more, no fewer.
+
+OUTPUT FORMAT: Return ONLY a valid JSON array. No markdown code blocks, no explanation text.
 
 [
   {{
     "scene_number": 1,
-    "narration": "exact narration text",
-    "visual_prompt": "hyperrealistic cinematic description under 500 chars",
+    "narration": "exact narration text for this scene",
+    "visual_prompt": "EXTREMELY DETAILED cinematic description — multiple paragraphs covering every visual department",
     "camera": "specific camera movement",
-    "lighting": "specific lighting",
+    "lighting": "specific lighting setup",
     "mood": "emotional mood",
     "sfx_prompt": "atmospheric sound description",
     "duration_sec": 8
@@ -155,7 +220,6 @@ def split_into_scenes(script_data: dict, output_dir) -> dict:
             len(scenes), config.SCENES_COUNT_MAX,
         )
         scenes = scenes[:config.SCENES_COUNT_MAX]
-        # Renumber scenes
         for i, scene in enumerate(scenes):
             scene["scene_number"] = i + 1
 
