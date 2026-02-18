@@ -173,6 +173,122 @@ OUTPUT: Return ONLY a valid JSON array. No markdown code blocks, no commentary.
   }}
 ]"""
 
+SCENE_PROMPT_UNLIMITED = """You are an Oscar-winning film director, cinematographer, and production designer creating MAXIMUM-DETAIL visual prompts for Sora 2 Pro, OpenAI's premier text-to-video AI. Sora 2 Pro has NO character limit — use this to write the most detailed, comprehensive prompts possible. Each prompt should read like a complete professional film shooting script.
+
+SCRIPT:
+{script}
+
+TASK: Break this script into EXACTLY {scene_count} scenes, each {scene_duration} seconds long.
+
+For each scene provide:
+1. **scene_number**: Sequential number (1 through {scene_count})
+2. **narration**: The exact narration text for this scene
+3. **visual_prompt**: MAXIMUM-DETAIL cinematic prompt — MUST be 3000-5000+ characters. This engine has NO limit, so fill every prompt with exhaustive cinematic detail. Under 2500 chars = UNACCEPTABLE.
+4. **camera**: Specific camera movement
+5. **lighting**: Specific lighting setup
+6. **mood**: Emotional mood
+7. **sfx_prompt**: Atmospheric sound effects
+8. **duration_sec**: {scene_duration}
+
+================================================================
+VISUAL PROMPT LENGTH: MINIMUM 3000 CHARACTERS, TARGET 4000-5000
+================================================================
+
+Sora 2 Pro has NO character limit on prompts. More detail = better video. Each visual_prompt MUST be at least 3000 characters (target 4000-5000). Write like a film director giving exhaustive instructions to every department head. If a prompt is under 3000 characters, you have not provided enough detail — add more about costumes, architecture, lighting, atmosphere, and motion.
+
+Every visual_prompt MUST begin with: "Hyperrealistic cinematic 4K footage, shot on ARRI Alexa 65"
+Every visual_prompt MUST end with: "absolutely no text, no signs, no writing, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no modern elements"
+
+Cover ALL 12 departments below IN ORDER. The character counts are MINIMUMS per department:
+
+**DEPT 1 — CAMERA & LENS (200+ chars):**
+Exact camera model, lens focal length (e.g., Panavision C-Series 40mm anamorphic at T2.0). Movement type: steadicam, dolly, crane, drone, handheld. Movement path described second by second: "camera starts at eye level, slowly rises to 30 feet, then pushes forward through the crowd." Movement speed: "extremely slow dolly push-in over 10 seconds." Depth of field: "shallow DOF with f/1.4, subject sharp, background rendered in soft circular bokeh." Stabilization method. Start and end framing.
+
+**DEPT 2 — SETTING & ARCHITECTURE (400+ chars):**
+Exact 18th-century French location with period-accurate details. Building materials: "rough limestone walls with crumbling mortar, exposed timber frame, slate rooftops with green verdigris copper gutters." Street details: "uneven cobblestone street approximately 4 meters wide, open sewage gutters along both sides, puddles reflecting the sky." Scale markers: "the street stretches 200 meters into the distance, flanked by 4-story buildings with iron juliet balconies." Specific structures: church steeple, market stalls, stone fountain. Props: overturned handcart, broken barrel spilling grain, scattered broadsheets, iron street lantern. Condition: soot-stained walls, moss between stones, cracked windowpanes, laundry lines between buildings.
+
+**DEPT 3 — CROWD COMPOSITION (400+ chars):**
+Exact numbers: "approximately 3000 people fill the boulevard from wall to wall." Demographics: "60% men aged 25-50, 25% women aged 20-45, 10% elderly, 5% children." What each group is doing with SPECIFIC ACTION VERBS: men SURGE forward with fists raised, women CLUTCH children protectively, boys SCRAMBLE atop walls, elderly men SHAKE walking sticks overhead. Crowd direction: "entire mass moves LEFT TO RIGHT toward the fortress gates." Crowd density: "shoulder to shoulder in the center, thinning near building walls." Individual clusters: three women passing a water jug, two men arguing while marching, a father hoisting a child onto his shoulders to see over the crowd.
+
+**DEPT 4 — COSTUMES BY SOCIAL CLASS (400+ chars):**
+Poor men: "rough undyed linen shirts, open at the collar, threadbare brown wool waistcoats, patched knee-length breeches, no stockings, wooden clogs or bare feet, cotton liberty caps (red Phrygian bonnets) on many heads, some wearing grimy leather aprons." Poor women: "faded grey cotton dresses, white linen aprons stained with soot, linen bonnets or mob caps, wooden clogs, woolen shawls wrapped around shoulders." Children: oversized hand-me-down shirts, barefoot or rope-soled shoes. Bourgeois (few): "dark broadcloth coats with brass buttons, clean white cravats, tricorn hats, leather shoes with buckles." Soldiers (if present): "blue and white uniforms with red facings, white crossbelts, tall bicorn hats, bayoneted Charleville muskets." Fabric textures: "rough homespun wool, fraying linen, sun-bleached cotton." Condition: "clothes are dirty, sweat-stained, torn at elbows and knees, mud-splattered hems."
+
+**DEPT 5 — FACES & EXPRESSIONS (200+ chars):**
+DISTANCE RULE: "all faces shown from medium or wide shot distance, waist-up minimum, NEVER extreme close-up." Specific emotions conveyed through body language: "clenched jaws, narrowed eyes, mouths open shouting, raised fists." Beauty rule: "aesthetically beautiful cinematography, natural attractive human faces, no grotesque or distorted features." Age details: "weathered skin, hollow cheeks from hunger, calloused hands, sun-darkened complexions." Hair: natural period-appropriate styles, men with shoulder-length hair tied back or under liberty caps.
+
+**DEPT 6 — LIGHTING (300+ chars):**
+Time of day with specifics: "late golden hour, sun 15 degrees above horizon." Light source: "warm directional sunlight from screen-left, supplemented by flickering orange torchlight from within the crowd." Color temperature: "natural daylight 5600K mixed with warm torchlight 2800K." Shadows: "long dramatic shadows stretching across the cobblestones from right to left, deep black in doorways and alleys." Special effects: "god rays breaking through gaps between rooftops, cutting through smoke haze, catching dust motes." Practical lights: iron lanterns on walls, wooden torches with pitch-soaked rags. Contrast ratio: "6:1 between highlights and deepest shadows."
+
+**DEPT 7 — ATMOSPHERE & PARTICLES (300+ chars):**
+Weather: "overcast sky with breaks of golden light, humidity visible in the air." Smoke: "thick grey-white smoke drifts from left to right across the mid-ground, density increasing toward the horizon, rising from multiple sources." Particles: "fine ash and embers float in the air, dust kicked up by thousands of feet creates a low ground haze, golden motes visible in light beams." Wind: "gentle wind from the west moving fabric, hair, flags, and smoke, canvas awnings flapping, torch flames bending." Temperature cues: visible perspiration, condensation on cold metal.
+
+**DEPT 8 — MOTION (300+ chars):**
+Camera motion: exact path and speed described second by second. Crowd motion: unified direction with specific individual actions described for 3-5 distinct people. Environmental motion: "smoke drifting, flames flickering 3-4 feet high, torn fabric fluttering, French tricolor flags snapping in the wind, torches casting dancing shadows, loose papers tumbling across cobblestones, wooden shutters banging in the wind, water in gutters rippling from ground vibration." Foreground motion: specific actions of 2-3 individual figures closest to camera.
+
+**DEPT 9 — COLOR PALETTE (250+ chars):**
+Overall grade: warm amber-golden highlights, cool blue-grey shadows, slightly desaturated midtones. Dominant colors: muted earth tones (off-white, grey-brown, faded indigo, dirty cream). Key accents: vivid scarlet-vermillion of liberty caps, warm orange of torch flames, deep navy of rare frock coats, silver-blue reflections in puddles. Contrast: "high contrast dramatic chiaroscuro with deep blacks and bright highlights." Saturation: 70% naturalistic with slight warmth push. Film grain: "subtle organic grain as if shot on 35mm celluloid, gentle vignetting at frame edges."
+
+**DEPT 10 — FOREGROUND / MIDGROUND / BACKGROUND (200+ chars):**
+Three distinct layers described separately. FOREGROUND (0-3m): slightly soft, a shoulder entering frame, iron pike tip crossing upper frame, cobblestones with mud and straw, torch casting lens flare. MIDGROUND (3-20m): sharpest focus, main crowd mass, primary actions, building facades, market stalls. BACKGROUND (20m+): progressively softer, rooftop silhouettes, church spire or palace dome, columns of smoke, clouds with color gradient. No empty areas anywhere.
+
+**DEPT 11 — SOUND DESIGN CUES (150+ chars):**
+Even though this is a visual prompt, describe the IMPLIED soundscape to guide the AI's sense of atmosphere: "the deafening roar of thousands of voices echoing between stone walls, the rhythmic thud of marching feet on cobblestone, distant cannon fire rumbling like thunder, the crackle of flames, church bells tolling a warning."
+
+**DEPT 12 — CINEMATIC REFERENCES (150+ chars):**
+Reference specific films or cinematographers for the visual style: "Shot in the style of Roger Deakins' work in 1917 — long unbroken takes with fluid camera movement through chaotic environments. Color grading inspired by Barry Lyndon — natural candlelight warmth with deep rich shadows. Composition echoing the battle sequences of Ridley Scott's Napoleon."
+
+================================================================
+ANTI-HALLUCINATION RULES (include in every prompt):
+================================================================
+- NO close-up faces — keep all people at medium or wide shot distance, waist-up minimum
+- NO text, NO signs, NO banners with writing, NO shop names, NO numbers
+- NO modern elements: no modern clothing, no glasses, no wristwatches, no modern hairstyles
+- NO symmetrical compositions — use asymmetric organic framing
+- NO static frozen poses — every person has a specific action verb
+- NO empty spaces — fill every area of the frame
+- CROWD DIRECTION: all people move in ONE unified direction
+- Always include: "aesthetically beautiful cinematography, natural attractive human faces"
+
+================================================================
+SCENE STRUCTURE (French Revolution):
+================================================================
+Scene 1: EPIC AERIAL — Drone descending over revolutionary Paris at dusk, massive crowd flooding streets, scale of 3000+ people, burning buildings on horizon
+Scene 2: THE CONTRAST — Steadicam through starving peasant hovel, match cut to opulent Versailles, Louis XVI alone on golden throne
+Scene 3: THE STORMING — Medium-wide tracking shot of crowd surging toward Bastille fortress, smoke and fire, determined faces, raised weapons
+Scene 4: THE AFTERMATH — Slow crane pulling back from quiet aftermath, abandoned royal symbols, empty cobblestone street, single French tricolor flag waving
+
+================================================================
+SFX PROMPT RULES:
+================================================================
+- Atmospheric ambient sounds ONLY
+- Be specific: "3000-person crowd roaring and chanting revolutionary slogans, distant church bells tolling urgently, horse hooves clattering on cobblestone, wooden cart wheels creaking, wind howling through narrow streets"
+- NEVER include graphic/violent sounds
+
+================================================================
+FINAL REMINDER:
+================================================================
+1. EXACTLY {scene_count} scenes
+2. Each visual_prompt = MINIMUM 3000 characters, TARGET 4000-5000. More detail is always better. There is NO upper limit.
+3. Begin each: "Hyperrealistic cinematic 4K footage, shot on ARRI Alexa 65"
+4. End each: "absolutely no text, no signs, no writing, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no modern elements"
+5. Cover ALL 12 departments in order with the minimum character counts specified
+6. If a prompt is under 3000 characters, you MUST expand it — add more architectural detail, more costume descriptions, more atmospheric particles, more lighting specifics, more motion descriptions
+
+OUTPUT: Return ONLY a valid JSON array. No markdown code blocks, no commentary.
+
+[
+  {{
+    "scene_number": 1,
+    "narration": "narration text",
+    "visual_prompt": "3000-5000+ characters of maximum-detail cinematic description covering all 12 departments",
+    "camera": "camera movement",
+    "lighting": "lighting setup",
+    "mood": "emotional mood",
+    "sfx_prompt": "atmospheric sounds",
+    "duration_sec": {scene_duration}
+  }}
+]"""
+
 SCENE_PROMPT_MEDIUM = """You are a world-class cinematic director creating prompts for an AI video model. Every scene must look like a real Hollywood film.
 
 SCRIPT:
@@ -239,14 +355,37 @@ RULES:
 - Return ONLY the expanded visual_prompt text, nothing else. No JSON, no quotes, no explanation."""
 
 
+EXPAND_PROMPT_UNLIMITED = """The visual_prompt for scene {scene_number} is only {current_len} characters. For Sora 2 Pro, each prompt should be at least 3000 characters (target 4000-5000).
+
+Current prompt:
+{current_prompt}
+
+EXPAND this prompt to at least 3500 characters by adding MORE detail:
+- More CAMERA detail: second-by-second movement path, lens specifics, focus pull descriptions
+- More SETTING detail: additional buildings, architectural ornaments, specific distances, material textures
+- More CROWD detail: additional individual character actions, specific numbers per area, more subgroups
+- More COSTUME detail: additional fabric descriptions, specific garments per social class, wear patterns
+- More LIGHTING detail: multiple light sources, color temperatures, shadow directions, reflections
+- More ATMOSPHERE: additional particle types, smoke density variations, wind effects, humidity signs
+- More MOTION: additional environmental movement, individual character actions, foreground/background
+- More COLOR: color grading details, accent colors, shadow hues, highlight tones
+- CINEMATIC REFERENCES: reference specific films or cinematographers for the visual style
+
+RULES:
+- Keep the same opening "Hyperrealistic cinematic 4K footage" and closing "no text, no signs..." etc
+- Keep all existing content — only ADD more detail between existing sentences
+- Target 3500-5000 characters. More detail is always better. There is NO upper limit.
+- Return ONLY the expanded visual_prompt text, nothing else. No JSON, no quotes, no explanation."""
+
+
 def _get_prompt_template(engine: str) -> str:
     """Select prompt template based on engine's prompt capacity."""
     engine_cfg = config.ENGINE_CONFIG.get(engine, {})
     max_chars = engine_cfg.get("max_prompt_chars")
 
     if max_chars is None:
-        # Unlimited (Sora) — use medium length
-        return SCENE_PROMPT_MEDIUM
+        # Unlimited (Sora 2 Pro, Sora 2) — use maximum detail
+        return SCENE_PROMPT_UNLIMITED
     elif max_chars >= 3000:
         # Long prompts (Grok Imagine)
         return SCENE_PROMPT_LONG
@@ -359,6 +498,43 @@ def _expand_short_prompts(client, scenes: list, min_chars: int = 3500, max_promp
     return scenes
 
 
+def _expand_short_prompts_unlimited(client, scenes: list, min_chars: int = 2500) -> list:
+    """Re-prompt Claude to expand short prompts for unlimited engines (Sora)."""
+    for scene in scenes:
+        vp = scene.get("visual_prompt", "")
+        sn = scene.get("scene_number", 0)
+        if len(vp) < min_chars:
+            logger.warning(
+                "Scene %d prompt is only %d chars (min %d for unlimited engine). Expanding...",
+                sn, len(vp), min_chars,
+            )
+            expand_msg = EXPAND_PROMPT_UNLIMITED.format(
+                scene_number=sn,
+                current_len=len(vp),
+                current_prompt=vp,
+            )
+            try:
+                resp = client.messages.create(
+                    model=config.CLAUDE_MODEL,
+                    max_tokens=8192,
+                    messages=[{"role": "user", "content": expand_msg}],
+                )
+                expanded = resp.content[0].text.strip()
+                if expanded.startswith('"') and expanded.endswith('"'):
+                    expanded = expanded[1:-1]
+                if len(expanded) > len(vp):
+                    scene["visual_prompt"] = expanded
+                    logger.info(
+                        "Scene %d expanded: %d -> %d chars",
+                        sn, len(vp), len(expanded),
+                    )
+                else:
+                    logger.warning("Scene %d expansion did not increase length.", sn)
+            except Exception as exc:
+                logger.warning("Scene %d expansion failed: %s", sn, exc)
+    return scenes
+
+
 def split_into_scenes(script_data: dict, output_dir, engine: str = None) -> dict:
     """Split script into scenes with visual prompts adapted to the video engine.
 
@@ -419,9 +595,13 @@ def split_into_scenes(script_data: dict, output_dir, engine: str = None) -> dict
         vp = scene.get("visual_prompt", "")
         logger.info("Scene %d visual_prompt: %d chars", scene.get("scene_number", 0), len(vp))
 
-    # For long-prompt engines: expand any prompts that are too short
+    # For long-prompt engines (Grok Imagine): expand any prompts that are too short
     if max_prompt_chars and max_prompt_chars >= 3000:
         scenes = _expand_short_prompts(client, scenes, min_chars=3500, max_prompt_chars=max_prompt_chars)
+
+    # For unlimited engines (Sora): expand any prompts under 2500 chars
+    if max_prompt_chars is None:
+        scenes = _expand_short_prompts_unlimited(client, scenes, min_chars=2500)
 
     # Enforce max prompt length per engine (safety truncation)
     if max_prompt_chars:
