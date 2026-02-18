@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Cache bust: change this value to force a fresh COPY
-ARG CACHEBUST=3
+ARG CACHEBUST=5
 COPY . .
 
 # Create output and data directories
