@@ -294,7 +294,7 @@ def get_history_record(video_id: str) -> dict | None:
 # Full pipeline
 # ---------------------------------------------------------------------------
 
-def run_pipeline(url: str, *, resume: bool = True, engine: str = None) -> dict:
+def run_pipeline(url: str, *, resume: bool = True, engine: str = None, video_id: str = None) -> dict:
     """Run the complete 9-step pipeline.
 
     Parameters
@@ -305,13 +305,17 @@ def run_pipeline(url: str, *, resume: bool = True, engine: str = None) -> dict:
         If True, skip steps with existing checkpoints.
     engine : str
         Video engine key. Defaults to config.DEFAULT_ENGINE.
+    video_id : str
+        Override video_id (for unique runs per engine). If None, extracted from URL.
     """
     engine = engine or config.DEFAULT_ENGINE
     _pipeline_cancel.clear()
     clear_log_buffer()
 
-    video_id = extract_video_id(url)
-    output_dir = get_output_dir(url)
+    if video_id is None:
+        video_id = extract_video_id(url)
+    output_dir = Path(config.OUTPUT_DIR) / video_id
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     write_status(state="running", step="source", step_number=1, progress=0.0,
                  message="Starting pipeline…", video_id=video_id, error=None, engine=engine)
