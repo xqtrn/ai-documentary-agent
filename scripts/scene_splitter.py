@@ -11,46 +11,38 @@ import config
 
 logger = logging.getLogger(__name__)
 
-SCENE_SPLIT_PROMPT = """You are a world-class cinematic director creating prompts for Runway Gen-4.5, the most advanced AI video model. Your goal: every scene must look like a real Hollywood film, NOT like AI art.
+SCENE_SPLIT_PROMPT = """You are a world-class cinematic director creating prompts for Grok Imagine, xAI's video generation model. Your goal: every scene must look like a real Hollywood film.
 
 SCRIPT:
 {script}
 
-TASK: Break this script into {scene_min}-{scene_max} scenes, each 8-10 seconds long.
+TASK: Break this script into {scene_min}-{scene_max} scenes, each 8 seconds long.
 
 For each scene provide:
 1. **scene_number**: Sequential number
 2. **narration**: The exact narration text for this scene
-3. **visual_prompt**: A HYPERREALISTIC cinematic prompt (see rules below, MAX 500 characters)
-4. **camera**: Specific camera movement (tracking, dolly, crane, steadicam, drone, handheld)
-5. **lighting**: Specific lighting (golden hour, candlelight, overcast with god rays, etc.)
-6. **mood**: Emotional mood for music/SFX selection
-7. **sfx_prompt**: Sound effect description for this scene (crowd noise, battle sounds, rain, etc.)
-8. **duration_sec**: 8-10 seconds
+3. **visual_prompt**: A cinematic video prompt (MAX 500 characters, see rules below)
+4. **camera**: Specific camera movement
+5. **lighting**: Specific lighting
+6. **mood**: Emotional mood for music/SFX
+7. **sfx_prompt**: Sound effect description (MUST avoid violent/graphic language — use atmospheric sounds only: crowd murmur, wind, rain, bells, footsteps, crackling fire, distant drums)
+8. **duration_sec**: 8
 
-HYPERREALISTIC VISUAL PROMPT RULES (CRITICAL):
-- Style MUST be: "hyperrealistic cinematic 4K film, shot on ARRI Alexa 65, anamorphic lens"
-- NEVER use words: "painting", "illustration", "artistic", "animated", "cartoon", "stylized", "digital art", "render"
-- Every scene MUST have significant MOTION: crowds moving, flags waving, horses galloping, flames flickering, smoke rising, rain falling, soldiers marching, people running, wind in hair/clothes
-- Think "what would be expensive to film in real life?" — massive crowds (thousands), military battles, cavalry charges, drone shots over battlefields, fire, explosions, weather effects
-- Include SPECIFIC camera movement in the prompt: "slow tracking shot", "aerial drone descending", "steadicam following through crowd", "crane shot rising above"
-- Include SPECIFIC environmental details: exact weather, time of day, dust particles in air, fog, smoke, reflections
-- Include period-accurate details: costumes, architecture, weapons, vehicles
-- NEVER include ANY text, letters, words, numbers, signs, labels, titles, subtitles
-- Every prompt MUST end with: "no text, no letters, no words, no subtitles"
-
-SCENE 1 RULE (OPENING SHOT):
-- Scene 1 MUST be an epic wide aerial establishing shot — the most dynamic, cinematic shot in the entire video
-- Use aerial drone or sweeping crane movement showing the FULL SCALE of the topic
-- Show thousands of people, massive locations, weather effects, smoke
-- Camera must be in CONSTANT motion — never static
-- Example: "Hyperrealistic cinematic 4K aerial drone shot slowly descending over 18th century Paris, thousands of citizens flooding cobblestone streets, smoke rising from distant barricades, overcast sky with dramatic god rays, shot on ARRI Alexa 65, anamorphic lens, no text, no letters, no words, no subtitles"
+VISUAL PROMPT RULES (MAX 500 CHARACTERS EACH):
+- Style: "Hyperrealistic cinematic 4K, shot on ARRI Alexa 65, anamorphic lens"
+- NEVER: "painting", "illustration", "animated", "cartoon", "artistic"
+- Every scene MUST have motion: crowds moving, flags waving, smoke rising, flames flickering
+- Include camera movement: drone, tracking, crane, steadicam
+- Include period-accurate costumes and architecture
+- Scene 1 MUST be an epic aerial establishing shot
+- End every prompt with: "no text, no letters, no words, no subtitles, no watermark"
+- Keep prompts CONCISE — under 500 characters. Grok works better with focused prompts.
 
 SFX PROMPT RULES:
-- Describe realistic ambient sounds for the scene
-- Be specific: "large crowd murmuring and shouting in a city square, distant church bells" NOT just "crowd noise"
-- Include environmental sounds: wind, rain, fire crackling, horse hooves on cobblestone
-- For battle scenes: specify weapons (cannons, muskets, swords), crowd reactions, explosions
+- Describe atmospheric ambient sounds only
+- Be specific: "large crowd murmuring, distant church bells, horse hooves on cobblestone"
+- NEVER include graphic/violent descriptions — content moderation will block them
+- Focus on: wind, rain, fire crackling, crowd murmur, bells, footsteps, drums, nature sounds
 
 OUTPUT FORMAT: Return ONLY a JSON array, no markdown code blocks.
 
@@ -58,12 +50,12 @@ OUTPUT FORMAT: Return ONLY a JSON array, no markdown code blocks.
   {{
     "scene_number": 1,
     "narration": "exact narration text",
-    "visual_prompt": "hyperrealistic cinematic description with camera movement, ending with no-text instruction",
+    "visual_prompt": "hyperrealistic cinematic description under 500 chars",
     "camera": "specific camera movement",
     "lighting": "specific lighting",
     "mood": "emotional mood",
-    "sfx_prompt": "detailed sound effect description",
-    "duration_sec": 10
+    "sfx_prompt": "atmospheric sound description",
+    "duration_sec": 8
   }}
 ]"""
 
