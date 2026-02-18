@@ -73,13 +73,19 @@ def assemble_video(
 
     # Step 2: Get paths
     voiceover_path = audio_data["voiceover_path"]
-    music_path = music_data["music_path"]
+    music_path = music_data.get("music_path") if music_data else None
+    has_music = music_path and Path(music_path).exists()
 
-    # Step 3: Mix audio
-    mixed_audio = str(output_dir / "mixed_audio.mp3")
-    _mix_audio(voiceover_path, music_path, audio_data.get("sfx", []), mixed_audio, output_dir)
+    # Step 3: Mix audio (or use voiceover only)
+    if has_music:
+        mixed_audio = str(output_dir / "mixed_audio.mp3")
+        _mix_audio(voiceover_path, music_path, audio_data.get("sfx", []), mixed_audio, output_dir)
+        audio_input = mixed_audio
+    else:
+        logger.info("No music available — using voiceover only.")
+        audio_input = voiceover_path
 
-    # Step 4: Combine video + mixed audio
+    # Step 4: Combine video + audio
     voiceover_duration = get_video_duration(voiceover_path)
     video_duration = get_video_duration(concat_video)
     target_duration = min(voiceover_duration, video_duration)
@@ -87,7 +93,7 @@ def assemble_video(
     cmd = [
         "ffmpeg", "-y",
         "-i", concat_video,
-        "-i", mixed_audio,
+        "-i", audio_input,
         "-c:v", "libx264",
         "-preset", "medium",
         "-crf", "23",
@@ -122,6 +128,7 @@ def assemble_video(
         "fps": 24,
         "clips_used": len(generated),
         "thumbnail": thumbnail_path,
+        "has_music": has_music,
     }
 
     with open(output_dir / "step8_assembly.json", "w") as f:
