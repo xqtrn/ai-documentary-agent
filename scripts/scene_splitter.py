@@ -183,7 +183,7 @@ TASK: Break this script into EXACTLY {scene_count} scenes, each {scene_duration}
 For each scene provide:
 1. **scene_number**: Sequential number (1 through {scene_count})
 2. **narration**: The exact narration text for this scene
-3. **visual_prompt**: MAXIMUM-DETAIL cinematic prompt — MUST be 3000-5000+ characters. This engine has NO limit, so fill every prompt with exhaustive cinematic detail. Under 2500 chars = UNACCEPTABLE.
+3. **visual_prompt**: Detailed cinematic prompt — MUST be 3000-5000 characters. Target exactly 4000 characters. Under 3000 = too short, over 5000 = too long. Be precise and dense, not repetitive.
 4. **camera**: Specific camera movement
 5. **lighting**: Specific lighting setup
 6. **mood**: Emotional mood
@@ -191,10 +191,10 @@ For each scene provide:
 8. **duration_sec**: {scene_duration}
 
 ================================================================
-VISUAL PROMPT LENGTH: MINIMUM 3000 CHARACTERS, TARGET 4000-5000
+VISUAL PROMPT LENGTH: MINIMUM 3000, TARGET 4000, MAXIMUM 5000
 ================================================================
 
-Sora 2 Pro has NO character limit on prompts. More detail = better video. Each visual_prompt MUST be at least 3000 characters (target 4000-5000). Write like a film director giving exhaustive instructions to every department head. If a prompt is under 3000 characters, you have not provided enough detail — add more about costumes, architecture, lighting, atmosphere, and motion.
+Each visual_prompt MUST be 3000-5000 characters. Target exactly 4000 characters. Write like a film director giving dense, precise instructions. Be specific but concise — do NOT pad with repetition. Under 3000 = too sparse. Over 5000 = too verbose and wastes tokens. Aim for 4000 characters of rich, non-repetitive detail.
 
 Every visual_prompt MUST begin with: "Hyperrealistic cinematic 4K footage, shot on ARRI Alexa 65"
 Every visual_prompt MUST end with: "absolutely no text, no signs, no writing, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no modern elements"
@@ -268,7 +268,7 @@ SFX PROMPT RULES:
 FINAL REMINDER:
 ================================================================
 1. EXACTLY {scene_count} scenes
-2. Each visual_prompt = MINIMUM 3000 characters, TARGET 4000-5000. More detail is always better. There is NO upper limit.
+2. Each visual_prompt = MINIMUM 3000 characters, TARGET 4000, MAXIMUM 5000. Do NOT exceed 5000 characters.
 3. Begin each: "Hyperrealistic cinematic 4K footage, shot on ARRI Alexa 65"
 4. End each: "absolutely no text, no signs, no writing, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no modern elements"
 5. Cover ALL 12 departments in order with the minimum character counts specified
@@ -280,7 +280,7 @@ OUTPUT: Return ONLY a valid JSON array. No markdown code blocks, no commentary.
   {{
     "scene_number": 1,
     "narration": "narration text",
-    "visual_prompt": "3000-5000+ characters of maximum-detail cinematic description covering all 12 departments",
+    "visual_prompt": "3000-5000 characters of dense cinematic description covering all 12 departments",
     "camera": "camera movement",
     "lighting": "lighting setup",
     "mood": "emotional mood",
@@ -568,7 +568,7 @@ def split_into_scenes(script_data: dict, output_dir, engine: str = None) -> dict
 
     response = client.messages.create(
         model=config.CLAUDE_MODEL,
-        max_tokens=16384,
+        max_tokens=32768,
         messages=[{"role": "user", "content": prompt}],
     )
 
