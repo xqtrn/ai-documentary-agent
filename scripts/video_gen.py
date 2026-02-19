@@ -147,10 +147,29 @@ def _generate_sora_video(prompt: str, duration: int, video_path: Path, engine_cf
         raise TimeoutError(f"Sora video {video_id} did not complete within {poll_timeout}s")
 
     # Step 3: Download content
-    with httpx.Client(timeout=30.0) as http:
+    with httpx.Client(timeout=180.0, follow_redirects=True) as http:
         resp = http.get(f"{base_url}/videos/{video_id}/content", headers=headers)
         resp.raise_for_status()
-        content_data = resp.json()
+
+        content_type = resp.headers.get("content-type", "")
+        logger.info("Sora content response: %d bytes, content-type=%s", len(resp.content), content_type)
+
+        # If response is binary video data, save directly
+        if "video" in content_type or "octet-stream" in content_type or len(resp.content) > 10000:
+            video_path.parent.mkdir(parents=True, exist_ok=True)
+            video_path.write_bytes(resp.content)
+            logger.info("Sora video saved directly: %d bytes -> %s", len(resp.content), video_path)
+            return video_path
+
+        # Otherwise try to parse as JSON for a download URL
+        try:
+            content_data = resp.json()
+        except Exception:
+            # Not JSON and not large binary — save raw bytes anyway
+            video_path.parent.mkdir(parents=True, exist_ok=True)
+            video_path.write_bytes(resp.content)
+            logger.info("Sora video saved as raw bytes: %d bytes -> %s", len(resp.content), video_path)
+            return video_path
 
     # Get download URL from content response
     video_url = None
