@@ -114,6 +114,7 @@ class GenerateRequest(BaseModel):
     mode: str = "full"
     engine: str = ""
     voice_key: str = ""
+    enhanced_prompts: bool = False
 
 
 class GenerateBatchRequest(BaseModel):
@@ -144,6 +145,7 @@ class AuthGenerateRequest(BaseModel):
     mode: str = "full"
     engine: str = ""
     voice_key: str = ""
+    enhanced_prompts: bool = False
 
 
 class AuthGenerateBatchRequest(BaseModel):
@@ -395,6 +397,18 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
         <div class="mode-btn" data-mode="fresh" onclick="selectMode(this)">Fresh Run</div>
       </div>
 
+      <!-- Enhanced Prompts V2 Toggle -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#e2e8f0;font-size:13px;">
+          <input type="checkbox" id="enhancedPromptsToggle"
+            style="width:16px;height:16px;accent-color:#7c3aed;cursor:pointer;"
+            onchange="updateEnhancedPrompts(this.checked)">
+          <span>Enhanced Prompts V2</span>
+          <span style="color:#666;font-size:11px;">(year-anchored, anti-hallucination)</span>
+        </label>
+        <span id="enhancedPromptsStatus" style="font-size:11px;color:#666;"></span>
+      </div>
+
       <!-- URL Input -->
       <div class="input-row">
         <input type="text" id="urlInput" placeholder="Paste YouTube URL..." />
@@ -480,6 +494,21 @@ function selectMode(el) {
   selectedMode = el.dataset.mode;
 }
 
+// --- Enhanced Prompts V2 ---
+var enhancedPrompts = false;
+function updateEnhancedPrompts(enabled) {
+  enhancedPrompts = enabled;
+  localStorage.setItem('enhanced_prompts', enabled ? 'true' : 'false');
+  document.getElementById('enhancedPromptsStatus').textContent = enabled
+    ? 'V2 active — year-anchored flags, clothing, architecture'
+    : '';
+}
+function initEnhancedPrompts() {
+  var saved = localStorage.getItem('enhanced_prompts') === 'true';
+  var toggle = document.getElementById('enhancedPromptsToggle');
+  if (toggle) { toggle.checked = saved; updateEnhancedPrompts(saved); }
+}
+
 // --- API helpers ---
 function apiUrl(path) {
   if(AUTH_MODE === "test") return "/api/test" + path + (path.indexOf("?") >= 0 ? "&" : "?") + "secret=" + SECRET;
@@ -543,7 +572,7 @@ async function startGenerate() {
   try {
     var resp = await fetch(apiUrl("/generate"), {method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: apiBody({url: url, mode: selectedMode, engine: selectedEngine, voice_key: selectedVoice})});
+      body: apiBody({url: url, mode: selectedMode, engine: selectedEngine, voice_key: selectedVoice, enhanced_prompts: enhancedPrompts})});
     var data = await resp.json();
     if(!resp.ok) throw new Error(data.detail || "Failed");
     if(data.video_id) window.location.href = projectUrl(data.video_id);
@@ -636,6 +665,7 @@ if(AUTH_MODE !== "test"){
   document.getElementById("historyLink").href = "/projects?secret=" + SECRET;
 }
 initEngineSelect();
+initEnhancedPrompts();
 loadVoiceSelector();
 loadProjects();
 setInterval(loadProjects, 8000);
@@ -1930,6 +1960,7 @@ async def test_generate(body: GenerateRequest):
     mode = body.mode
     engine = _resolve_engine(body.engine)
     voice_key = body.voice_key or None
+    enhanced_prompts = body.enhanced_prompts
 
     # Compute video_id — unique per engine for fresh mode
     base_video_id = _extract_video_id(url)
@@ -1944,14 +1975,14 @@ async def test_generate(body: GenerateRequest):
             if mode == "analysis":
                 run_analysis(url, engine=engine)
             elif mode == "fresh":
-                run_pipeline(url, resume=False, engine=engine, video_id=video_id, voice_key=voice_key)
+                run_pipeline(url, resume=False, engine=engine, video_id=video_id, voice_key=voice_key, enhanced_prompts=enhanced_prompts)
             else:
-                run_pipeline(url, engine=engine, video_id=video_id, voice_key=voice_key)
+                run_pipeline(url, engine=engine, video_id=video_id, voice_key=voice_key, enhanced_prompts=enhanced_prompts)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
     threading.Thread(target=run_bg, daemon=True).start()
-    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id, "voice_key": voice_key}
+    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id, "voice_key": voice_key, "enhanced_prompts": enhanced_prompts}
 
 
 @app.get("/api/test/status")
@@ -2389,6 +2420,7 @@ async def auth_generate(request: Request, body: AuthGenerateRequest):
     mode = body.mode
     engine = _resolve_engine(body.engine)
     voice_key = body.voice_key or None
+    enhanced_prompts = body.enhanced_prompts
 
     # Compute video_id — unique per engine for fresh mode
     base_video_id = _extract_video_id(url)
@@ -2403,14 +2435,14 @@ async def auth_generate(request: Request, body: AuthGenerateRequest):
             if mode == "analysis":
                 run_analysis(url, engine=engine)
             elif mode == "fresh":
-                run_pipeline(url, resume=False, engine=engine, video_id=video_id, voice_key=voice_key)
+                run_pipeline(url, resume=False, engine=engine, video_id=video_id, voice_key=voice_key, enhanced_prompts=enhanced_prompts)
             else:
-                run_pipeline(url, engine=engine, video_id=video_id, voice_key=voice_key)
+                run_pipeline(url, engine=engine, video_id=video_id, voice_key=voice_key, enhanced_prompts=enhanced_prompts)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
     threading.Thread(target=run_bg, daemon=True).start()
-    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id, "voice_key": voice_key}
+    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id, "voice_key": voice_key, "enhanced_prompts": enhanced_prompts}
 
 
 @app.get("/api/status")
