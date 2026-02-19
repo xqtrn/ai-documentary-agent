@@ -125,7 +125,7 @@ SCENE_DURATION_SEC = 8
 SCENES_COUNT_MIN = 3
 SCENES_COUNT_MAX = 4
 
-MAX_RETRIES = 3
+MAX_RETRIES = 1
 BATCH_SIZE = 10
 WEB_PORT = int(os.environ.get("PORT", "8080"))
 TEST_SECRET = os.environ.get("RUN_SECRET", "test_pipeline_2026")
