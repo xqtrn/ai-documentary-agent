@@ -77,7 +77,7 @@ SCRIPT:
 TASK: Break this script into EXACTLY {scene_count} scenes, each {scene_duration} seconds long.
 
 ================================================================
-15 MANDATORY ANTI-HALLUCINATION RULES → NOW 18 RULES
+15 MANDATORY ANTI-HALLUCINATION RULES — NOW 18 RULES
 ================================================================
 
 RULE 1 — STATE YEAR AND LOCATION: Begin every visual_prompt with "France, 1789."
@@ -148,6 +148,99 @@ OUTPUT: Return ONLY a valid JSON array, no markdown.
     "duration_sec": {scene_duration}
   }}
 ]"""
+
+# ===================================================================
+# NEW: Enhanced V2 template — Claude generates 4080-4090 char prompts
+# with year-anchored rules embedded directly in the system prompt.
+# ===================================================================
+
+SCENE_PROMPT_ENHANCED = """You are a cinematic director writing ULTRA-DETAILED visual prompts for Grok Imagine V2 video generation.
+
+YEAR: {year}. LOCATION: {location}.
+
+ABSOLUTE REQUIREMENT: Each visual_prompt MUST be EXACTLY 4080-4090 characters. Count precisely after writing. If under 4000 characters — ADD MORE DETAIL until you reach 4080+. This is NON-NEGOTIABLE. Short prompts produce generic video. Every extra character of description = better visual output.
+
+You are generating 4 scenes for a {duration}-second documentary about: {topic}
+
+SCRIPT CONTEXT:
+{script_summary}
+
+HISTORICAL ACCURACY RULES FOR {year} {location}:
+- YEAR ANCHOR: Every visual element must be labeled with the year. Example: "{year}-era limestone buildings" not just "buildings"
+- FLAGS: {flag_rule}
+- CLOTHING: {clothing_rule}
+- OBJECTS: {objects_rule}
+- ARCHITECTURE: {architecture_rule}
+
+GROK IMAGINE V2 — KNOWN ISSUES TO PREVENT:
+- NO close-up faces — Grok distorts facial features at close range. All people at MEDIUM or WIDE shot (waist-up minimum, full body preferred)
+- NO text, signs, banners with writing, shop names, newspapers — Grok generates illegible gibberish text
+- NO modern elements — Grok inserts modern clothing, glasses, wristwatches, sneakers if not explicitly forbidden
+- NO symmetrical compositions — Grok defaults to artificial symmetry. Always specify: asymmetric, organic, offset framing
+- NO static poses — Grok defaults to frozen tableaux. Every single person must have a specific ACTION VERB (running, pushing, pointing, carrying, stumbling)
+- NO empty spaces — fill every layer: foreground crowd + midground action + background architecture/sky/smoke
+- NO anachronistic hairstyles — specify: men have natural hair tied with ribbon, cotton liberty caps, or tricorn hats. NOT modern undercuts or fades
+- CROWD DIRECTION: All people must move in ONE unified direction. Say: "entire crowd surges LEFT TO RIGHT toward the fortress" — Grok defaults to random wandering
+- EXACT NUMBERS: "approximately 3000 people fill the cobblestone street" not "a large crowd"
+- BEAUTY RULE: always append "aesthetically beautiful cinematography, natural attractive human faces, no grotesque or distorted features, photorealistic skin textures"
+
+FOR EACH SCENE — DESCRIBE ALL OF THESE DEPARTMENTS (this is why prompts must be 4080+ chars):
+
+**CAMERA & LENS**: Exact movement (steadicam/crane/drone/dolly/handheld), speed (slow/medium/fast), direction (left-to-right/descending/pushing in), focal length (24mm/35mm/50mm), aperture (f/1.8/f/2.8/f/5.6), depth of field (shallow/deep), any special effects (lens flare, dust on lens)
+
+**SETTING & ARCHITECTURE ({year})**: Building materials (limestone/timber/brick), street width in meters, building height in stories, specific architectural details (mansard roofs/Gothic arches/wrought iron), what year these structures were built, what is NOT present (no Eiffel Tower, no Haussmann boulevards, no gas lamps if pre-1820), ground surface (wet cobblestones/mud/packed earth), debris and environmental detail
+
+**CROWD COMPOSITION**: Exact percentage breakdown (e.g., "60% working-class men, 25% women, 10% children, 5% bourgeoisie"), what each group is carrying (pitchforks/torches/bread/muskets/flags), their movement direction and speed
+
+**COSTUMES ({year} — historically accurate)**: Fabric type for each social class (rough linen/wool/silk), specific garments (culottes/chemise/sabots/tricorn), colors (muted ochres/dark browns/dirty whites), condition (worn/torn/dirty), footwear, headwear, accessories. FORBIDDEN: zippers, elastic, synthetic fabrics, rubber soles, modern cuts
+
+**FACES & EXPRESSIONS**: Shot distance rule (no closer than waist-up), emotion descriptors (determined/desperate/furious/fearful), age distribution, natural beauty standard, no grotesque or distorted features
+
+**LIGHTING**: Primary source (late afternoon sun/torchlight/overcast sky), direction (raking from left/backlit/overhead), color temperature in Kelvin (2700K torchlight/5500K daylight/7000K overcast), shadow hardness (hard-edged/soft/diffuse), any secondary sources (reflected light from water/windows)
+
+**ATMOSPHERE & WEATHER**: Season, temperature suggestion, wind direction and strength, particles in air (smoke density/dust/fog/rain), visibility distance in meters, smell suggestion (smoke/gunpowder/sweat/mud) for mood reference
+
+**MOTION LAYERS**: Camera movement speed and direction, crowd movement direction and speed, individual hero actions (woman in foreground pushes cart LEFT, man in midground raises torch RIGHT, child in background runs AWAY), environmental motion (flags rippling, smoke drifting, birds startling)
+
+**COLOR PALETTE**: Primary colors (desaturated ochre/dark charcoal/blood red), secondary colors (dirty white/rust/deep shadow), specific hex-level description if helpful, overall grade (warm golden hour/cold grey overcast/high-contrast torchlight)
+
+**DEPTH LAYERS**:
+- FOREGROUND (0-3m): Specific individuals, their exact actions, costumes, expressions
+- MIDGROUND (3-15m): Main crowd action, key visual element, architecture fragment
+- BACKGROUND (15m+): Full architectural context, sky, smoke, scale reference
+
+Generate exactly 4 scenes following this structure:
+
+SCENE 1 (0:00-0:08) — EPIC AERIAL ESTABLISHING SHOT
+Drone descending from 200m altitude down to 15m above the crowd. We see revolutionary {location} from above — the density of {year}-era streets, smoke rising from multiple points. As drone descends, we begin to see individual faces and torches. Camera movement: slow vertical descent combined with slight northward drift.
+
+SCENE 2 (0:08-0:16) — THE HUMAN COST
+Ground level steadicam moving through the crowd. We see the faces of the revolution — exhausted mothers, young men with hollow cheeks, elderly citizens who have waited decades. Contrast of desperate poverty against ornate {year} architecture. The camera weaves between individuals, each with their own story.
+
+SCENE 3 (0:16-0:24) — THE STORMING ACTION
+The crowd surges toward its target. Maximum kinetic energy. Tracking shot moving LEFT TO RIGHT with the crowd. Torches, screaming faces (at distance), weapons raised. This is the moment of historical rupture.
+
+SCENE 4 (0:24-0:32) — THE AFTERMATH / RESOLUTION
+Slow crane pulling back and upward. The immediate aftermath — some jubilation, some shock, some grief. The camera rises to show the scale of what has happened — thousands of people, changed forever. Emotional, quiet, monumental.
+
+OUTPUT FORMAT — return valid JSON:
+{{
+  "scenes": [
+    {{
+      "scene_number": 1,
+      "time_start": "0:00",
+      "time_end": "0:08",
+      "visual_prompt": "EXACTLY 4080-4090 CHARS HERE — count after writing",
+      "narration": "What the narrator says during this scene (2-3 sentences)",
+      "mood": "epic/tense/dramatic/somber",
+      "camera": "specific camera movement description"
+    }}
+  ]
+}}
+
+CRITICAL: After writing each visual_prompt — count the characters. If under 4080 — add more detail to COSTUMES, ATMOSPHERE, or CROWD COMPOSITION sections until you reach 4080-4090. Do not truncate. Do not summarize. More detail = better video.
+"""
+
 
 SCENE_PROMPT_UNLIMITED = """You are an Oscar-winning film director, cinematographer, and production designer creating MAXIMUM-DETAIL visual prompts for Sora 2 Pro, OpenAI's premier text-to-video AI. Sora 2 Pro has NO character limit — use this to write the most detailed, comprehensive prompts possible. Each prompt should read like a complete professional film shooting script.
 
@@ -363,28 +456,46 @@ def _fix_json(text: str) -> str:
 
 
 def _parse_json_robust(raw_text: str) -> list:
-    """Try multiple strategies to parse JSON from LLM output."""
+    """Try multiple strategies to parse JSON from LLM output.
+
+    Handles both plain arrays [...] and {"scenes": [...]} wrapper format.
+    """
     text = raw_text.strip()
 
+    def _unwrap(parsed):
+        """If parsed is a dict with 'scenes' key, extract the array."""
+        if isinstance(parsed, dict) and "scenes" in parsed:
+            return parsed["scenes"]
+        return parsed
+
     try:
-        return json.loads(text)
+        return _unwrap(json.loads(text))
     except json.JSONDecodeError:
         pass
 
     fixed = _fix_json(text)
     try:
-        return json.loads(fixed)
+        return _unwrap(json.loads(fixed))
     except json.JSONDecodeError:
         pass
+
+    # Try to find {"scenes": [...]} wrapper first
+    scenes_match = re.search(r'\{\s*"scenes"\s*:\s*\[.*?\]\s*\}', fixed, re.DOTALL)
+    if scenes_match:
+        try:
+            parsed = json.loads(scenes_match.group())
+            return _unwrap(parsed)
+        except json.JSONDecodeError:
+            pass
 
     match = re.search(r'\[.*\]', fixed, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group())
+            return _unwrap(json.loads(match.group()))
         except json.JSONDecodeError:
             arr_text = re.sub(r',\s*([}\]])', r'\1', match.group())
             try:
-                return json.loads(arr_text)
+                return _unwrap(json.loads(arr_text))
             except json.JSONDecodeError:
                 pass
 
@@ -800,9 +911,8 @@ def split_into_scenes(script_data: dict, output_dir, engine: str = None,
                       source_data: dict = None) -> dict:
     """Split script into scenes with visual prompts adapted to the video engine.
 
-    V2 Enhancement: When source_data is provided, applies year-anchored
-    anti-hallucination prompts via build_grok_prompt() after Claude generates
-    the base scene structure.
+    V2 Enhancement: When source_data is provided, uses SCENE_PROMPT_ENHANCED
+    template so Claude generates 4080-4090 char year-anchored prompts directly.
 
     Args:
         script_data: Dict with "script" key.
@@ -824,62 +934,125 @@ def split_into_scenes(script_data: dict, output_dir, engine: str = None,
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
     target_count = config.SCENES_COUNT_MAX
-    template = _get_prompt_template(engine)
-
-    prompt = template.format(
-        script=script_data["script"],
-        scene_count=target_count,
-        scene_duration=scene_duration,
-        max_prompt_chars=max_prompt_chars or "unlimited",
-    )
-
-    response = client.messages.create(
-        model=config.CLAUDE_MODEL,
-        max_tokens=16384,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    raw_text = response.content[0].text
-    logger.info("V2: Scene splitter raw response: %d chars", len(raw_text))
-
-    scenes = _parse_json_robust(raw_text)
-
-    if not isinstance(scenes, list) or len(scenes) == 0:
-        raise RuntimeError(f"Scene splitter returned invalid data: {type(scenes)}")
-
-    # Enforce max scene count
-    if len(scenes) > config.SCENES_COUNT_MAX:
-        logger.warning(
-            "Scene splitter returned %d scenes, truncating to %d",
-            len(scenes), config.SCENES_COUNT_MAX,
-        )
-        scenes = scenes[:config.SCENES_COUNT_MAX]
-        for i, scene in enumerate(scenes):
-            scene["scene_number"] = i + 1
-
-    # Log prompt lengths (before enhancement)
-    for scene in scenes:
-        vp = scene.get("visual_prompt", "")
-        logger.info("V2: Scene %d visual_prompt (Claude): %d chars", scene.get("scene_number", 0), len(vp))
 
     # ===============================================================
-    # V2 ENHANCEMENT: Apply year-anchored anti-hallucination prompts
+    # V2 ENHANCED PATH: Use SCENE_PROMPT_ENHANCED with year-anchored rules
+    # Claude generates 4080-4090 char prompts directly — no post-processing
     # ===============================================================
     if source_data:
         title = source_data.get("video_title", source_data.get("title", ""))
         year = _extract_year_from_title(title)
         location = _extract_location_from_title(title)
-        logger.info("V2: Applying year-anchored prompts: year=%d, location=%s", year, location)
+        logger.info("V2 ENHANCED: year=%d, location=%s, title=%s", year, location, title)
 
+        # Fill year-anchored rules from helper functions
+        flag_rule = _get_flag_rule(year, location)
+        clothing_rule = _get_period_clothing(year, location)
+        objects_rule = _get_period_objects(year, location)
+        architecture_rule = _get_period_architecture(year, location)
+
+        # Build topic and script summary
+        topic = title or "historical event"
+        script_text = script_data.get("script", "")
+        script_summary = script_text[:3000]  # First 3000 chars for context
+        duration = target_count * scene_duration
+
+        prompt = SCENE_PROMPT_ENHANCED.format(
+            year=year,
+            location=location,
+            duration=duration,
+            topic=topic,
+            script_summary=script_summary,
+            flag_rule=flag_rule,
+            clothing_rule=clothing_rule,
+            objects_rule=objects_rule,
+            architecture_rule=architecture_rule,
+        )
+
+        logger.info("V2 ENHANCED: Prompt template filled — %d chars, sending to Claude...", len(prompt))
+
+        response = client.messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=32768,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        raw_text = response.content[0].text
+        logger.info("V2 ENHANCED: Claude response — %d chars", len(raw_text))
+
+        scenes = _parse_json_robust(raw_text)
+
+        if not isinstance(scenes, list) or len(scenes) == 0:
+            raise RuntimeError(f"Scene splitter returned invalid data: {type(scenes)}")
+
+        # Enforce max scene count
+        if len(scenes) > config.SCENES_COUNT_MAX:
+            logger.warning("Truncating %d scenes to %d", len(scenes), config.SCENES_COUNT_MAX)
+            scenes = scenes[:config.SCENES_COUNT_MAX]
+            for i, scene in enumerate(scenes):
+                scene["scene_number"] = i + 1
+
+        # Ensure duration_sec is set
         for scene in scenes:
-            original_len = len(scene.get("visual_prompt", ""))
-            scene["visual_prompt"] = build_grok_prompt(scene, year=year, location=location)
-            logger.info(
-                "V2: Scene %d prompt replaced: %d -> %d chars (year-anchored)",
-                scene.get("scene_number", 0), original_len, len(scene["visual_prompt"]),
-            )
+            if "duration_sec" not in scene:
+                scene["duration_sec"] = scene_duration
+
+        # Log prompt lengths — these should be 4080-4090 chars from Claude
+        all_long = True
+        for scene in scenes:
+            vp = scene.get("visual_prompt", "")
+            sn = scene.get("scene_number", 0)
+            logger.info("V2 ENHANCED: Scene %d visual_prompt = %d chars", sn, len(vp))
+            if len(vp) < 3500:
+                all_long = False
+
+        # If Claude didn't generate long enough prompts, expand them
+        if not all_long:
+            logger.warning("V2 ENHANCED: Some prompts under 3500 chars — expanding...")
+            scenes = _expand_short_prompts(client, scenes, min_chars=3500, max_prompt_chars=max_prompt_chars or 4096)
+
+    # ===============================================================
+    # STANDARD PATH: Use original templates
+    # ===============================================================
     else:
-        logger.info("V2: No source_data provided — using Claude-generated prompts without year-anchoring.")
+        logger.info("V2: No source_data — using standard templates.")
+        template = _get_prompt_template(engine)
+
+        prompt = template.format(
+            script=script_data["script"],
+            scene_count=target_count,
+            scene_duration=scene_duration,
+            max_prompt_chars=max_prompt_chars or "unlimited",
+        )
+
+        response = client.messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=16384,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        raw_text = response.content[0].text
+        logger.info("V2: Scene splitter raw response: %d chars", len(raw_text))
+
+        scenes = _parse_json_robust(raw_text)
+
+        if not isinstance(scenes, list) or len(scenes) == 0:
+            raise RuntimeError(f"Scene splitter returned invalid data: {type(scenes)}")
+
+        # Enforce max scene count
+        if len(scenes) > config.SCENES_COUNT_MAX:
+            logger.warning(
+                "Scene splitter returned %d scenes, truncating to %d",
+                len(scenes), config.SCENES_COUNT_MAX,
+            )
+            scenes = scenes[:config.SCENES_COUNT_MAX]
+            for i, scene in enumerate(scenes):
+                scene["scene_number"] = i + 1
+
+        # Log prompt lengths
+        for scene in scenes:
+            vp = scene.get("visual_prompt", "")
+            logger.info("V2: Scene %d visual_prompt (Claude): %d chars", scene.get("scene_number", 0), len(vp))
 
         # For long-prompt engines (Grok Imagine): expand any prompts that are too short
         if max_prompt_chars and max_prompt_chars >= 3000:
