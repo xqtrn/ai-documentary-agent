@@ -568,7 +568,7 @@ def split_into_scenes(script_data: dict, output_dir, engine: str = None) -> dict
 
     response = client.messages.create(
         model=config.CLAUDE_MODEL,
-        max_tokens=32768,
+        max_tokens=16384,
         messages=[{"role": "user", "content": prompt}],
     )
 
