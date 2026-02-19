@@ -133,12 +133,15 @@ def _generate_sora_video(prompt: str, duration: int, video_path: Path, engine_cf
             data = resp.json()
 
         status = data.get("status", "").lower()
+        elapsed = poll_timeout - (deadline - time.time())
         if status == "completed":
+            logger.info("Sora video %s completed after %.0fs", video_id, elapsed)
             break
         if status in ("failed", "error"):
             raise RuntimeError(f"Sora video failed: {data}")
-        elapsed = int(time.time() + poll_timeout - deadline + poll_timeout - (deadline - time.time()))
-        logger.debug("Sora video %s status: %s (%.0fs elapsed)", video_id, status, poll_timeout - (deadline - time.time()))
+        # Log status every 30s to track progress
+        if int(elapsed) % 30 < 10:
+            logger.info("Sora video %s status: %s (%.0fs elapsed)", video_id, status, elapsed)
         time.sleep(10)
     else:
         raise TimeoutError(f"Sora video {video_id} did not complete within {poll_timeout}s")
