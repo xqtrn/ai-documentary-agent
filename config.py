@@ -180,6 +180,9 @@ BATCH_SIZE = 10
 WEB_PORT = int(os.environ.get("PORT", "8080"))
 TEST_SECRET = os.environ.get("RUN_SECRET", "test_pipeline_2026")
 
+# Enhanced Prompts V2 — year-anchored anti-hallucination (scene_splitter_v2)
+USE_ENHANCED_PROMPTS = os.environ.get("USE_ENHANCED_PROMPTS", "false").lower() == "true"
+
 # History
 HISTORY_FILE = os.path.join(OUTPUT_DIR, "history.json")
 
