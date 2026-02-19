@@ -115,6 +115,7 @@ class GenerateRequest(BaseModel):
     engine: str = ""
     voice_key: str = ""
     enhanced_prompts: bool = False
+    video_id: str = ""
 
 
 class GenerateBatchRequest(BaseModel):
@@ -1962,13 +1963,16 @@ async def test_generate(body: GenerateRequest):
     voice_key = body.voice_key or None
     enhanced_prompts = body.enhanced_prompts
 
-    # Compute video_id — unique per engine for fresh mode
-    base_video_id = _extract_video_id(url)
-    if engine != config.DEFAULT_ENGINE:
-        suffix = engine.replace("-", "_").replace(".", "")
-        video_id = f"{base_video_id}_{suffix}"
+    # Use custom video_id if provided, otherwise compute from URL + engine
+    if body.video_id:
+        video_id = body.video_id
     else:
-        video_id = base_video_id
+        base_video_id = _extract_video_id(url)
+        if engine != config.DEFAULT_ENGINE:
+            suffix = engine.replace("-", "_").replace(".", "")
+            video_id = f"{base_video_id}_{suffix}"
+        else:
+            video_id = base_video_id
 
     def run_bg():
         try:
