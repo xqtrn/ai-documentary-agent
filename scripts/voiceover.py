@@ -105,13 +105,46 @@ def _concatenate_audio(file_paths: list[Path], output_path: Path) -> Path:
     return output_path
 
 
-def generate_voiceover(script_text: str, output_dir) -> Path:
-    """Generate voiceover via Runway TTS API."""
+def _get_voice_config(voice_key: str | None = None) -> dict:
+    """Get voice configuration for TTS. Returns voice_id and settings."""
+    voice_key = voice_key or config.DEFAULT_VOICE
+    voices = getattr(config, "ELEVENLABS_VOICES", {})
+    if voice_key not in voices:
+        logger.warning("Voice key '%s' not found, falling back to '%s'", voice_key, config.DEFAULT_VOICE)
+        voice_key = config.DEFAULT_VOICE
+    if voice_key not in voices:
+        # Ultimate fallback to first available voice
+        if voices:
+            voice_key = next(iter(voices))
+        else:
+            return {"voice_id": "JBFqnCBsd6RMkjVDRZzb", "name": "George"}
+    return voices[voice_key]
+
+
+def generate_voiceover(script_text: str, output_dir, voice_key: str | None = None) -> Path:
+    """Generate voiceover via Runway TTS API.
+
+    Parameters
+    ----------
+    script_text : str
+        The narration script text.
+    output_dir : path-like
+        Directory to save output audio.
+    voice_key : str, optional
+        Key into config.ELEVENLABS_VOICES (e.g. 'george', 'daniel').
+        Defaults to config.DEFAULT_VOICE.
+    """
     config.check_api_key("RUNWAY_API_KEY")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     client = RunwayML(api_key=config.RUNWAY_API_KEY)
+
+    # Resolve voice
+    voice_cfg = _get_voice_config(voice_key)
+    voice_id = voice_cfg["voice_id"]
+    voice_name = voice_cfg.get("name", voice_key or "default")
+    logger.info("Using voice: %s (id=%s)", voice_name, voice_id)
 
     # Clean script markers
     clean_text = script_text
@@ -134,8 +167,12 @@ def generate_voiceover(script_text: str, output_dir) -> Path:
                 model=config.RUNWAY_TTS_MODEL,
                 prompt_text=chunk_text,
                 voice={
-                    "type": "runway-preset",
-                    "presetId": config.RUNWAY_TTS_VOICE,
+                    "type": "elevenlabs",
+                    "voiceId": voice_id,
+                    "stability": voice_cfg.get("stability", 0.5),
+                    "similarity_boost": voice_cfg.get("similarity_boost", 0.75),
+                    "style": voice_cfg.get("style", 0.0),
+                    "use_speaker_boost": voice_cfg.get("use_speaker_boost", True),
                 },
             )
         except Exception as exc:
@@ -160,7 +197,7 @@ def generate_voiceover(script_text: str, output_dir) -> Path:
         for cp in chunk_paths:
             cp.unlink(missing_ok=True)
 
-    logger.info("Voiceover complete: %s", final_path)
+    logger.info("Voiceover complete: %s (voice=%s)", final_path, voice_name)
     return final_path
 
 
@@ -245,8 +282,14 @@ def _mood_to_sfx_prompt(mood: str, visual_prompt: str) -> str:
     return "ambient atmospheric sounds, subtle cinematic environmental texture"
 
 
-def generate_audio(script_data: dict, scenes_data: dict, output_dir) -> dict:
-    """Main entry: generate voiceover + per-scene SFX."""
+def generate_audio(script_data: dict, scenes_data: dict, output_dir, voice_key: str | None = None) -> dict:
+    """Main entry: generate voiceover + per-scene SFX.
+
+    Parameters
+    ----------
+    voice_key : str, optional
+        Key into config.ELEVENLABS_VOICES for voice selection.
+    """
     output_dir = Path(output_dir)
     audio_dir = output_dir / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -255,14 +298,15 @@ def generate_audio(script_data: dict, scenes_data: dict, output_dir) -> dict:
     if not script_text:
         raise ValueError("script_data must contain a non-empty 'script' key.")
 
-    logger.info("Generating voiceover for %d-char script...", len(script_text))
-    voiceover_path = generate_voiceover(script_text, audio_dir)
+    logger.info("Generating voiceover for %d-char script (voice_key=%s)...", len(script_text), voice_key)
+    voiceover_path = generate_voiceover(script_text, audio_dir, voice_key=voice_key)
 
     logger.info("Generating per-scene SFX...")
     sfx_results = generate_sfx(scenes_data.get("scenes", []), audio_dir)
 
     result = {
         "voiceover_path": str(voiceover_path),
+        "voice_key": voice_key or config.DEFAULT_VOICE,
         "sfx": sfx_results,
         "sfx_count": len(sfx_results),
     }

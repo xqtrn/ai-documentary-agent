@@ -12,6 +12,7 @@ import re
 import threading
 import time
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -112,6 +113,7 @@ class GenerateRequest(BaseModel):
     url: str
     mode: str = "full"
     engine: str = ""
+    voice_key: str = ""
 
 
 class GenerateBatchRequest(BaseModel):
@@ -141,6 +143,7 @@ class AuthGenerateRequest(BaseModel):
     url: str
     mode: str = "full"
     engine: str = ""
+    voice_key: str = ""
 
 
 class AuthGenerateBatchRequest(BaseModel):
@@ -156,6 +159,39 @@ class AuthRegenerateSceneRequest(BaseModel):
 class AuthEditPromptRequest(BaseModel):
     scene_number: int
     visual_prompt: str
+
+
+class RegenerateAudioRequest(BaseModel):
+    secret: Optional[str] = None
+    voice_key: str = ""
+
+
+class SceneRetryRequest(BaseModel):
+    secret: Optional[str] = None
+    scene_number: int
+    engine: str = ""
+    visual_prompt: str = ""
+
+
+class AnnotationRequest(BaseModel):
+    secret: Optional[str] = None
+    scene_number: int
+    frame_time: float = 0.0
+    frame_image: str = ""
+    notes: str = ""
+    tags: list[str] = []
+
+
+class AnnotationDeleteRequest(BaseModel):
+    secret: Optional[str] = None
+    annotation_id: str = ""
+
+
+class GenerateFixRequest(BaseModel):
+    secret: Optional[str] = None
+    scene_number: int
+    annotation_id: str = ""
+    notes: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +357,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 <div class="header">
   <h1>AI Documentary Agent V3</h1>
   <div class="links">
-    <a id="historyLink" href="/history" style="color:#c4b5fd;font-size:14px">History</a>
+    <a id="historyLink" href="/projects" style="color:#c4b5fd;font-size:14px">Projects</a>
     <span style="color:#888;font-size:13px" id="userLabel"></span>
     <a href="/logout" id="logoutLink" style="display:none">Logout</a>
   </div>
@@ -344,6 +380,13 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
         </select>
       </div>
       <div class="engine-info" id="engineInfo"></div>
+
+      <!-- Voice selector -->
+      <div class="engine-row">
+        <select class="engine-select" id="voiceSelect" onchange="updateVoiceInfo()">
+        </select>
+      </div>
+      <div id="voiceInfo" style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 18px;margin-bottom:16px;font-size:13px;color:#888"></div>
 
       <!-- Mode -->
       <div class="mode-select">
@@ -459,6 +502,36 @@ function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+// --- Voice selector ---
+var selectedVoice = "";
+var VOICE_CONFIG = {};
+async function loadVoiceSelector() {
+  try {
+    var resp = await fetch(apiUrl("/voices"));
+    if(!resp.ok) return;
+    var data = await resp.json();
+    VOICE_CONFIG = data.voices || {};
+    selectedVoice = data.default || "george";
+    var sel = document.getElementById("voiceSelect");
+    sel.innerHTML = "";
+    var keys = Object.keys(VOICE_CONFIG);
+    for(var i=0;i<keys.length;i++){
+      var k = keys[i];
+      var opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = VOICE_CONFIG[k].name;
+      if(k === selectedVoice) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    updateVoiceInfo();
+  }catch(e){console.error("loadVoiceSelector",e)}
+}
+function updateVoiceInfo() {
+  selectedVoice = document.getElementById("voiceSelect").value;
+  var v = VOICE_CONFIG[selectedVoice];
+  document.getElementById("voiceInfo").textContent = v ? v.description : "";
+}
+
 // --- Generate ---
 async function startGenerate() {
   var url = document.getElementById("urlInput").value.trim();
@@ -470,7 +543,7 @@ async function startGenerate() {
   try {
     var resp = await fetch(apiUrl("/generate"), {method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: apiBody({url: url, mode: selectedMode, engine: selectedEngine})});
+      body: apiBody({url: url, mode: selectedMode, engine: selectedEngine, voice_key: selectedVoice})});
     var data = await resp.json();
     if(!resp.ok) throw new Error(data.detail || "Failed");
     if(data.video_id) window.location.href = projectUrl(data.video_id);
@@ -560,9 +633,10 @@ if(AUTH_MODE !== "test"){
   document.getElementById("logoutLink").style.display="inline";
   document.getElementById("userLabel").textContent="{{username}}";
 } else {
-  document.getElementById("historyLink").href = "/history?secret=" + SECRET;
+  document.getElementById("historyLink").href = "/projects?secret=" + SECRET;
 }
 initEngineSelect();
+loadVoiceSelector();
 loadProjects();
 setInterval(loadProjects, 8000);
 </script>
@@ -871,6 +945,71 @@ PROJECT_PAGE = """<!DOCTYPE html>
     <div class="output-meta" id="outputMeta"></div>
     <div class="download-row" id="downloadRow"></div>
   </div>
+
+  <!-- Voice Selector Panel -->
+  <div class="section" id="sectionVoice">
+    <h2><span class="num">V</span> Voice Selector</h2>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Narrator Voice</div>
+        <select id="voiceSelect" style="width:100%;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e4e4e7;font-size:14px;outline:none;cursor:pointer">
+        </select>
+      </div>
+      <div id="voiceDesc" style="flex:2;min-width:200px;font-size:13px;color:#888;background:#1a1a24;border-radius:8px;padding:10px 14px"></div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:12px;align-items:center">
+      <button class="btn btn-sm" id="regenAudioBtn" onclick="regenerateAudio()">Regenerate Audio</button>
+      <span id="regenAudioStatus" style="font-size:13px;color:#888"></span>
+    </div>
+  </div>
+
+  <!-- Scene Retry Panel -->
+  <div class="section" id="sectionSceneRetry">
+    <h2><span class="num">R</span> Scene Retry</h2>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Scene #</div>
+        <select id="retrySceneSelect" style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e4e4e7;font-size:14px;outline:none"></select>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:12px;color:#888;margin-bottom:4px">New Prompt (optional)</div>
+        <input id="retryPromptInput" type="text" placeholder="Leave empty to use existing prompt" style="width:100%;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e4e4e7;font-size:13px;outline:none">
+      </div>
+      <button class="btn btn-sm" onclick="retryScene()">Retry Scene</button>
+    </div>
+    <div id="retryStatus" style="font-size:13px;color:#888;margin-top:8px"></div>
+  </div>
+
+  <!-- Annotation Panel -->
+  <div class="section" id="sectionAnnotations">
+    <h2><span class="num">A</span> Frame Annotations</h2>
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Global Annotation Rules</div>
+      <textarea id="globalRules" placeholder="Enter global rules that apply to all scenes (e.g. 'No text overlays', 'Maintain 16th century aesthetic')..." style="width:100%;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e4e4e7;font-size:13px;outline:none;min-height:60px;resize:vertical;font-family:inherit"></textarea>
+      <button class="btn btn-sm btn-outline" onclick="saveGlobalRules()" style="margin-top:6px">Save Rules</button>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">
+      <div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Scene #</div>
+        <select id="annotSceneSelect" style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e4e4e7;font-size:14px;outline:none"></select>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Notes</div>
+        <input id="annotNotes" type="text" placeholder="What's wrong with this frame?" style="width:100%;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e4e4e7;font-size:13px;outline:none">
+      </div>
+      <button class="btn btn-sm" onclick="addAnnotation()">Add Note</button>
+      <button class="btn btn-sm btn-outline" onclick="generateFix()">Generate Fix</button>
+    </div>
+    <div id="annotationsList" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+
+  <!-- Iteration History Panel -->
+  <div class="section" id="sectionIterations">
+    <h2><span class="num">H</span> Iteration History</h2>
+    <div id="iterationsList" style="display:flex;flex-direction:column;gap:8px">
+      <div style="color:#555;font-size:13px">No iterations yet.</div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="editModal">
@@ -1088,6 +1227,15 @@ function renderProject(data){
   renderScenes({scenes:scenes});
   renderGenControls({scenes:scenes, state:data.state||"idle"});
   if(data.assembly) renderOutput(data);
+
+  // Show new panels when scenes exist
+  if(scenes.length > 0){
+    show("sectionVoice");
+    show("sectionSceneRetry");
+    show("sectionAnnotations");
+    show("sectionIterations");
+    populateSceneSelects(scenes);
+  }
 }
 
 async function cancelPipeline(){
@@ -1141,8 +1289,208 @@ async function pollProject(){
   }catch(e){}
 }
 
+// --- Voice selector ---
+var voicesLoaded = false;
+var voiceConfig = {};
+async function loadVoices(){
+  if(voicesLoaded) return;
+  try{
+    var resp = await apiFetch("/voices");
+    if(!resp.ok) return;
+    var data = await resp.json();
+    voiceConfig = data.voices || {};
+    var sel = document.getElementById("voiceSelect");
+    sel.innerHTML = "";
+    var keys = Object.keys(voiceConfig);
+    for(var i=0;i<keys.length;i++){
+      var k = keys[i];
+      var opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = voiceConfig[k].name;
+      if(k === (data.default||"george")) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.onchange = function(){
+      var v = voiceConfig[sel.value];
+      document.getElementById("voiceDesc").textContent = v ? v.description : "";
+    };
+    sel.onchange();
+    voicesLoaded = true;
+  }catch(e){console.error("loadVoices",e)}
+}
+
+async function regenerateAudio(){
+  var voice = document.getElementById("voiceSelect").value;
+  var btn = document.getElementById("regenAudioBtn");
+  btn.disabled = true; btn.textContent = "Regenerating...";
+  document.getElementById("regenAudioStatus").textContent = "Starting...";
+  try{
+    var resp = await apiPost("/project/"+VIDEO_ID+"/regenerate-audio",{voice_key:voice});
+    if(!resp.ok){var d=await resp.json();alert(d.detail||"Failed");return}
+    pollRegenAudio();
+  }catch(e){alert("Error: "+e.message)}
+  finally{btn.disabled=false;btn.textContent="Regenerate Audio"}
+}
+
+async function pollRegenAudio(){
+  try{
+    var resp = await apiFetch("/project/"+VIDEO_ID+"/regen-audio-status");
+    if(!resp.ok) return;
+    var data = await resp.json();
+    document.getElementById("regenAudioStatus").textContent = data.message || data.state;
+    if(data.state === "running") setTimeout(pollRegenAudio, 3000);
+    else if(data.state === "completed") pollProject();
+  }catch(e){}
+}
+
+// --- Scene retry ---
+function populateSceneSelects(scenes){
+  var retryS = document.getElementById("retrySceneSelect");
+  var annotS = document.getElementById("annotSceneSelect");
+  var opts = "";
+  for(var i=0;i<scenes.length;i++){
+    var n = scenes[i].scene_number || (i+1);
+    opts += '<option value="'+n+'">Scene '+n+'</option>';
+  }
+  retryS.innerHTML = opts;
+  annotS.innerHTML = opts;
+}
+
+async function retryScene(){
+  var num = parseInt(document.getElementById("retrySceneSelect").value);
+  var prompt = document.getElementById("retryPromptInput").value.trim();
+  document.getElementById("retryStatus").textContent = "Retrying scene "+num+"...";
+  try{
+    var body = {scene_number:num};
+    if(prompt) body.visual_prompt = prompt;
+    var resp = await apiPost("/project/"+VIDEO_ID+"/scene-retry",body);
+    if(!resp.ok){var d=await resp.json();alert(d.detail||"Failed");return}
+    pollSceneRetry();
+  }catch(e){alert("Error: "+e.message)}
+}
+
+async function pollSceneRetry(){
+  try{
+    var resp = await apiFetch("/project/"+VIDEO_ID+"/scene-retry-status");
+    if(!resp.ok) return;
+    var data = await resp.json();
+    document.getElementById("retryStatus").textContent = data.message || data.state;
+    if(data.state === "running") setTimeout(pollSceneRetry, 3000);
+    else if(data.state === "completed") pollProject();
+  }catch(e){}
+}
+
+// --- Annotations ---
+async function loadAnnotations(){
+  try{
+    var resp = await apiFetch("/project/"+VIDEO_ID+"/annotations");
+    if(!resp.ok) return;
+    var data = await resp.json();
+    renderAnnotations(data.annotations || []);
+  }catch(e){}
+}
+
+function renderAnnotations(annotations){
+  var el = document.getElementById("annotationsList");
+  if(!annotations.length){el.innerHTML='<div style="color:#555;font-size:13px">No annotations yet.</div>';return}
+  el.innerHTML = annotations.map(function(a){
+    return '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:12px;display:flex;gap:12px;align-items:flex-start">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:12px;color:#888;margin-bottom:4px">Scene '+a.scene_number+(a.created_at?' &mdash; '+a.created_at.split("T")[0]:'')+'</div>'+
+        '<div style="font-size:13px;color:#ccc">'+escHtml(a.notes)+'</div>'+
+        (a.tags&&a.tags.length?'<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">'+a.tags.map(function(t){return'<span style="background:#23233a;color:#aaa;padding:2px 8px;border-radius:4px;font-size:11px">'+escHtml(t)+'</span>'}).join("")+'</div>':'')+
+      '</div>'+
+      '<button class="btn btn-sm btn-outline" onclick="deleteAnnotation(\\''+a.id+'\\')">Del</button>'+
+    '</div>';
+  }).join("");
+}
+
+async function addAnnotation(){
+  var num = parseInt(document.getElementById("annotSceneSelect").value);
+  var notes = document.getElementById("annotNotes").value.trim();
+  if(!notes){alert("Enter notes first");return}
+  try{
+    var resp = await apiPost("/project/"+VIDEO_ID+"/annotations",{scene_number:num,notes:notes});
+    if(!resp.ok){var d=await resp.json();alert(d.detail||"Failed");return}
+    document.getElementById("annotNotes").value = "";
+    loadAnnotations();
+  }catch(e){alert("Error: "+e.message)}
+}
+
+async function deleteAnnotation(id){
+  try{
+    var resp = await apiPost("/project/"+VIDEO_ID+"/annotations/delete",{annotation_id:id});
+    if(!resp.ok){var d=await resp.json();alert(d.detail||"Failed");return}
+    loadAnnotations();
+  }catch(e){alert("Error: "+e.message)}
+}
+
+async function generateFix(){
+  var num = parseInt(document.getElementById("annotSceneSelect").value);
+  var notes = document.getElementById("annotNotes").value.trim();
+  if(!notes){alert("Enter notes describing the issue first");return}
+  try{
+    var resp = await apiPost("/project/"+VIDEO_ID+"/annotations/generate-fix",{scene_number:num,notes:notes});
+    if(!resp.ok){var d=await resp.json();alert(d.detail||"Failed");return}
+    var data = await resp.json();
+    if(data.fixed_prompt){
+      openEditModal(num);
+      document.getElementById("editPromptText").value = data.fixed_prompt;
+    }
+  }catch(e){alert("Error: "+e.message)}
+}
+
+async function loadGlobalRules(){
+  try{
+    var resp = await apiFetch("/project/"+VIDEO_ID+"/annotation-rules");
+    if(!resp.ok) return;
+    var data = await resp.json();
+    document.getElementById("globalRules").value = data.rules || "";
+  }catch(e){}
+}
+
+async function saveGlobalRules(){
+  var rules = document.getElementById("globalRules").value;
+  try{
+    var resp = await apiPost("/project/"+VIDEO_ID+"/annotation-rules",{rules:rules});
+    if(!resp.ok){var d=await resp.json();alert(d.detail||"Failed");return}
+  }catch(e){alert("Error: "+e.message)}
+}
+
+// --- Iterations ---
+async function loadIterations(){
+  try{
+    var resp = await apiFetch("/project/"+VIDEO_ID+"/iterations");
+    if(!resp.ok) return;
+    var data = await resp.json();
+    var items = data.iterations || [];
+    var el = document.getElementById("iterationsList");
+    if(!items.length){el.innerHTML='<div style="color:#555;font-size:13px">No iterations yet.</div>';return}
+    el.innerHTML = items.map(function(it,i){
+      var date = it.created_at ? it.created_at.split("T")[0] : "";
+      var engine = it.engine || "";
+      var voice = it.voice_key || "";
+      return '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:12px;display:flex;gap:12px;align-items:center">'+
+        '<span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700">#'+(i+1)+'</span>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;color:#ccc">'+(it.message||"Pipeline run")+'</div>'+
+          '<div style="font-size:12px;color:#888;margin-top:2px">'+
+            (engine?engine+" &middot; ":"")+(voice?"voice: "+voice+" &middot; ":"")+(date||"")+
+          '</div>'+
+        '</div>'+
+        '<span style="font-size:12px;color:'+(it.status==="completed"?"#4ade80":"#888")+'">'+escHtml(it.status||"unknown")+'</span>'+
+      '</div>';
+    }).join("");
+  }catch(e){}
+}
+
+// --- Init ---
 pollProject();
 pollTimer = setInterval(pollProject, 3000);
+loadVoices();
+loadAnnotations();
+loadGlobalRules();
+loadIterations();
 window.addEventListener("beforeunload",function(){if(pollTimer)clearInterval(pollTimer)});
 document.getElementById("editModal").addEventListener("click",function(e){if(e.target===this)closeEditModal()});
 document.getElementById("srcTranscript").addEventListener("click",function(){
@@ -1216,14 +1564,21 @@ async def dashboard(request: Request, secret: str = ""):
     return RedirectResponse("/")
 
 
-@app.get("/history", response_class=HTMLResponse)
-async def history_page(request: Request, secret: str = ""):
+@app.get("/projects", response_class=HTMLResponse)
+async def projects_page(request: Request, secret: str = ""):
     user = get_current_user(request)
     if user:
         return HTMLResponse(render_history_page(auth_mode="telegram", username=user.get("first_name", "User")))
     if secret and verify_test_secret(secret):
         return HTMLResponse(render_history_page(auth_mode="test", secret=secret))
     return RedirectResponse("/")
+
+
+@app.get("/history")
+async def history_redirect(request: Request, secret: str = ""):
+    if secret:
+        return RedirectResponse(f"/projects?secret={secret}", status_code=302)
+    return RedirectResponse("/projects", status_code=302)
 
 
 @app.get("/project/{video_id}", response_class=HTMLResponse)
@@ -1284,6 +1639,7 @@ async def test_generate(body: GenerateRequest):
     url = body.url
     mode = body.mode
     engine = _resolve_engine(body.engine)
+    voice_key = body.voice_key or None
 
     # Compute video_id — unique per engine for fresh mode
     base_video_id = _extract_video_id(url)
@@ -1298,14 +1654,14 @@ async def test_generate(body: GenerateRequest):
             if mode == "analysis":
                 run_analysis(url, engine=engine)
             elif mode == "fresh":
-                run_pipeline(url, resume=False, engine=engine, video_id=video_id)
+                run_pipeline(url, resume=False, engine=engine, video_id=video_id, voice_key=voice_key)
             else:
-                run_pipeline(url, engine=engine, video_id=video_id)
+                run_pipeline(url, engine=engine, video_id=video_id, voice_key=voice_key)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
     threading.Thread(target=run_bg, daemon=True).start()
-    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id}
+    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id, "voice_key": voice_key}
 
 
 @app.get("/api/test/status")
@@ -1442,18 +1798,294 @@ async def test_cancel(video_id: str, body: GenerateAllRequest):
     return {"status": "cancelled", "video_id": video_id}
 
 
-@app.get("/api/test/history")
-async def test_history(secret: str = ""):
-    if not verify_test_secret(secret):
-        raise HTTPException(status_code=403, detail="Invalid secret")
-    return {"history": get_history()}
-
-
 @app.get("/api/test/engines")
 async def test_engines(secret: str = ""):
     if not verify_test_secret(secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
     return {"engines": config.ENGINE_CONFIG, "default": config.DEFAULT_ENGINE}
+
+
+@app.get("/api/test/voices")
+async def test_voices(secret: str = ""):
+    if not verify_test_secret(secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    voices = {}
+    for key, v in config.ELEVENLABS_VOICES.items():
+        voices[key] = {"name": v["name"], "description": v.get("description", "")}
+    return {"voices": voices, "default": config.DEFAULT_VOICE}
+
+
+# --- Regenerate Audio (with different voice, no video re-render) ---
+
+_regen_audio_status = {"state": "idle", "message": "", "voice_key": ""}
+_regen_audio_lock = threading.Lock()
+
+
+@app.post("/api/test/project/{video_id}/regenerate-audio")
+async def test_regenerate_audio(video_id: str, body: RegenerateAudioRequest):
+    if not verify_test_secret(body.secret or ""):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    voice_key = body.voice_key or config.DEFAULT_VOICE
+
+    with _regen_audio_lock:
+        if _regen_audio_status["state"] == "running":
+            raise HTTPException(status_code=409, detail="Audio regeneration already in progress")
+        _regen_audio_status["state"] = "running"
+        _regen_audio_status["message"] = f"Regenerating audio with voice '{voice_key}'..."
+        _regen_audio_status["voice_key"] = voice_key
+
+    def run_bg():
+        try:
+            from pipeline import get_output_dir, load_step_data, save_checkpoint, STEP_FILES
+            output_dir = get_output_dir(video_id)
+            script_data = load_step_data(output_dir, STEP_FILES["script"])
+            scenes_data = load_step_data(output_dir, STEP_FILES["scenes"])
+            if not script_data:
+                raise FileNotFoundError("No script data")
+            if not scenes_data:
+                raise FileNotFoundError("No scenes data")
+
+            from scripts.voiceover import generate_audio as gen_audio
+            audio_data = gen_audio(script_data, scenes_data, output_dir, voice_key=voice_key)
+            save_checkpoint(output_dir, STEP_FILES["audio"], audio_data)
+
+            # Re-assemble video with new audio
+            from pipeline import assemble_project
+            assemble_project(video_id)
+
+            with _regen_audio_lock:
+                _regen_audio_status["state"] = "completed"
+                _regen_audio_status["message"] = f"Audio regenerated with voice '{voice_key}'"
+        except Exception as e:
+            logger.error("Regenerate audio error: %s", e)
+            with _regen_audio_lock:
+                _regen_audio_status["state"] = "failed"
+                _regen_audio_status["message"] = str(e)
+
+    threading.Thread(target=run_bg, daemon=True).start()
+    return {"status": "started", "video_id": video_id, "voice_key": voice_key}
+
+
+@app.get("/api/test/project/{video_id}/regen-audio-status")
+async def test_regen_audio_status(video_id: str, secret: str = ""):
+    if not verify_test_secret(secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    with _regen_audio_lock:
+        return dict(_regen_audio_status)
+
+
+# --- Scene Retry ---
+
+_scene_retry_status = {"state": "idle", "scene_number": 0, "message": ""}
+_scene_retry_lock = threading.Lock()
+
+
+@app.post("/api/test/project/{video_id}/scene-retry")
+async def test_scene_retry(video_id: str, body: SceneRetryRequest):
+    if not verify_test_secret(body.secret or ""):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    engine = _resolve_engine(body.engine)
+    scene_number = body.scene_number
+
+    with _scene_retry_lock:
+        _scene_retry_status["state"] = "running"
+        _scene_retry_status["scene_number"] = scene_number
+        _scene_retry_status["message"] = f"Retrying scene {scene_number}..."
+
+    def run_bg():
+        try:
+            # If new prompt provided, update it first
+            if body.visual_prompt:
+                edit_scene_prompt(video_id, scene_number, body.visual_prompt)
+            regenerate_scene(video_id, scene_number, engine=engine)
+            with _scene_retry_lock:
+                _scene_retry_status["state"] = "completed"
+                _scene_retry_status["message"] = f"Scene {scene_number} regenerated"
+        except Exception as e:
+            logger.error("Scene retry error: %s", e)
+            with _scene_retry_lock:
+                _scene_retry_status["state"] = "failed"
+                _scene_retry_status["message"] = str(e)
+
+    threading.Thread(target=run_bg, daemon=True).start()
+    return {"status": "started", "video_id": video_id, "scene_number": scene_number, "engine": engine}
+
+
+@app.get("/api/test/project/{video_id}/scene-retry-status")
+async def test_scene_retry_status(video_id: str, secret: str = ""):
+    if not verify_test_secret(secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    with _scene_retry_lock:
+        return dict(_scene_retry_status)
+
+
+# --- Annotations ---
+
+def _annotations_path(video_id: str) -> Path:
+    return Path(OUTPUT_DIR) / video_id / "annotations.json"
+
+
+def _load_annotations(video_id: str) -> list:
+    path = _annotations_path(video_id)
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_annotations(video_id: str, annotations: list) -> None:
+    path = _annotations_path(video_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(annotations, indent=2, default=str))
+
+
+@app.get("/api/test/project/{video_id}/annotations")
+async def test_get_annotations(video_id: str, secret: str = ""):
+    if not verify_test_secret(secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    return {"annotations": _load_annotations(video_id)}
+
+
+@app.post("/api/test/project/{video_id}/annotations")
+async def test_add_annotation(video_id: str, body: AnnotationRequest):
+    if not verify_test_secret(body.secret or ""):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import uuid
+    annotations = _load_annotations(video_id)
+    annotation = {
+        "id": str(uuid.uuid4())[:8],
+        "scene_number": body.scene_number,
+        "frame_time": body.frame_time,
+        "frame_image": body.frame_image,
+        "notes": body.notes,
+        "tags": body.tags,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    annotations.append(annotation)
+    _save_annotations(video_id, annotations)
+    return {"status": "added", "annotation": annotation}
+
+
+@app.post("/api/test/project/{video_id}/annotations/delete")
+async def test_delete_annotation(video_id: str, body: AnnotationDeleteRequest):
+    if not verify_test_secret(body.secret or ""):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    annotations = _load_annotations(video_id)
+    annotations = [a for a in annotations if a.get("id") != body.annotation_id]
+    _save_annotations(video_id, annotations)
+    return {"status": "deleted", "annotation_id": body.annotation_id}
+
+
+@app.post("/api/test/project/{video_id}/annotations/generate-fix")
+async def test_generate_fix(video_id: str, body: GenerateFixRequest):
+    if not verify_test_secret(body.secret or ""):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    from pipeline import get_output_dir, load_step_data, STEP_FILES
+    output_dir = get_output_dir(video_id)
+    scenes_data = load_step_data(output_dir, STEP_FILES["scenes"])
+    if not scenes_data:
+        raise HTTPException(status_code=404, detail="No scenes data")
+
+    target_scene = None
+    for sc in scenes_data.get("scenes", []):
+        if sc.get("scene_number") == body.scene_number:
+            target_scene = sc
+            break
+    if not target_scene:
+        raise HTTPException(status_code=404, detail=f"Scene {body.scene_number} not found")
+
+    original_prompt = target_scene.get("visual_prompt", "")
+    notes = body.notes
+
+    # Load global annotation rules if they exist
+    rules_path = Path(OUTPUT_DIR) / video_id / "annotation_rules.json"
+    global_rules = ""
+    if rules_path.exists():
+        try:
+            rules_data = json.loads(rules_path.read_text())
+            global_rules = rules_data.get("rules", "")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    fix_prompt = f"""Fix this video scene prompt based on the annotation feedback.
+
+Original prompt: {original_prompt}
+
+Feedback/Issues: {notes}
+{f"Global rules: {global_rules}" if global_rules else ""}
+
+Generate an improved visual prompt that addresses the feedback while keeping the scene's intent.
+Return ONLY the new prompt text, nothing else."""
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=1000,
+            messages=[{"role": "user", "content": fix_prompt}],
+        )
+        fixed_prompt = resp.content[0].text.strip()
+        return {"status": "ok", "original_prompt": original_prompt, "fixed_prompt": fixed_prompt}
+    except Exception as e:
+        logger.error("Generate fix error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Global Annotation Rules ---
+
+@app.get("/api/test/project/{video_id}/annotation-rules")
+async def test_get_annotation_rules(video_id: str, secret: str = ""):
+    if not verify_test_secret(secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    rules_path = Path(OUTPUT_DIR) / video_id / "annotation_rules.json"
+    if rules_path.exists():
+        try:
+            return json.loads(rules_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"rules": ""}
+
+
+class AnnotationRulesRequest(BaseModel):
+    secret: Optional[str] = None
+    rules: str = ""
+
+
+@app.post("/api/test/project/{video_id}/annotation-rules")
+async def test_save_annotation_rules(video_id: str, body: AnnotationRulesRequest):
+    if not verify_test_secret(body.secret or ""):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    rules_path = Path(OUTPUT_DIR) / video_id / "annotation_rules.json"
+    rules_path.parent.mkdir(parents=True, exist_ok=True)
+    rules_path.write_text(json.dumps({"rules": body.rules}, indent=2))
+    return {"status": "saved"}
+
+
+# --- Project Iterations ---
+
+def _iterations_path(video_id: str) -> Path:
+    return Path(OUTPUT_DIR) / video_id / "iterations.json"
+
+
+def _load_iterations(video_id: str) -> list:
+    path = _iterations_path(video_id)
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+@app.get("/api/test/project/{video_id}/iterations")
+async def test_get_iterations(video_id: str, secret: str = ""):
+    if not verify_test_secret(secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    return {"iterations": _load_iterations(video_id)}
 
 
 # ---------------------------------------------------------------------------
@@ -1466,6 +2098,7 @@ async def auth_generate(request: Request, body: AuthGenerateRequest):
     url = body.url
     mode = body.mode
     engine = _resolve_engine(body.engine)
+    voice_key = body.voice_key or None
 
     # Compute video_id — unique per engine for fresh mode
     base_video_id = _extract_video_id(url)
@@ -1480,14 +2113,14 @@ async def auth_generate(request: Request, body: AuthGenerateRequest):
             if mode == "analysis":
                 run_analysis(url, engine=engine)
             elif mode == "fresh":
-                run_pipeline(url, resume=False, engine=engine, video_id=video_id)
+                run_pipeline(url, resume=False, engine=engine, video_id=video_id, voice_key=voice_key)
             else:
-                run_pipeline(url, engine=engine, video_id=video_id)
+                run_pipeline(url, engine=engine, video_id=video_id, voice_key=voice_key)
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
 
     threading.Thread(target=run_bg, daemon=True).start()
-    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id}
+    return {"status": "started", "mode": mode, "engine": engine, "video_id": video_id, "voice_key": voice_key}
 
 
 @app.get("/api/status")
@@ -1590,6 +2223,15 @@ async def auth_history(request: Request):
 async def auth_engines(request: Request):
     require_user(request)
     return {"engines": config.ENGINE_CONFIG, "default": config.DEFAULT_ENGINE}
+
+
+@app.get("/api/voices")
+async def auth_voices(request: Request):
+    require_user(request)
+    voices = {}
+    for key, v in config.ELEVENLABS_VOICES.items():
+        voices[key] = {"name": v["name"], "description": v.get("description", "")}
+    return {"voices": voices, "default": config.DEFAULT_VOICE}
 
 
 @app.get("/api/outputs")

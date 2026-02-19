@@ -294,7 +294,8 @@ def get_history_record(video_id: str) -> dict | None:
 # Full pipeline
 # ---------------------------------------------------------------------------
 
-def run_pipeline(url: str, *, resume: bool = True, engine: str = None, video_id: str = None) -> dict:
+def run_pipeline(url: str, *, resume: bool = True, engine: str = None,
+                  video_id: str = None, voice_key: str = None) -> dict:
     """Run the complete 9-step pipeline.
 
     Parameters
@@ -307,6 +308,8 @@ def run_pipeline(url: str, *, resume: bool = True, engine: str = None, video_id:
         Video engine key. Defaults to config.DEFAULT_ENGINE.
     video_id : str
         Override video_id (for unique runs per engine). If None, extracted from URL.
+    voice_key : str
+        Voice key for TTS. Defaults to config.DEFAULT_VOICE.
     """
     engine = engine or config.DEFAULT_ENGINE
     _pipeline_cancel.clear()
@@ -388,8 +391,8 @@ def run_pipeline(url: str, *, resume: bool = True, engine: str = None, video_id:
         write_status(step="audio", step_number=6, message="Generating voiceover…", progress=55.0)
         audio_data = load_step_data(output_dir, STEP_FILES["audio"]) if resume else None
         if audio_data is None:
-            logger.info("Step 6/9: Voiceover generation.")
-            audio_data = generate_audio(script_data, scenes_data, output_dir)
+            logger.info("Step 6/9: Voiceover generation (voice=%s).", voice_key)
+            audio_data = generate_audio(script_data, scenes_data, output_dir, voice_key=voice_key)
             save_checkpoint(output_dir, STEP_FILES["audio"], audio_data)
         else:
             logger.info("Step 6/9: Audio — loaded from checkpoint.")
@@ -575,7 +578,7 @@ def generate_scene_batch(video_id: str, scene_numbers: list, engine: str = None)
     return merged
 
 
-def generate_project_audio(video_id: str) -> dict:
+def generate_project_audio(video_id: str, voice_key: str = None) -> dict:
     """Generate voiceover and music (steps 6-7)."""
     output_dir = get_output_dir(video_id)
 
@@ -589,8 +592,8 @@ def generate_project_audio(video_id: str) -> dict:
 
     write_status(state="running", step="audio", step_number=6,
                  message="Generating voiceover…", video_id=video_id, error=None)
-    logger.info("Generating voiceover for %s", video_id)
-    audio_data = generate_audio(script_data, scenes_data, output_dir)
+    logger.info("Generating voiceover for %s (voice=%s)", video_id, voice_key)
+    audio_data = generate_audio(script_data, scenes_data, output_dir, voice_key=voice_key)
     save_checkpoint(output_dir, STEP_FILES["audio"], audio_data)
 
     write_status(step="music", step_number=7, message="Generating background music…", progress=50.0)
@@ -831,39 +834,3 @@ def estimate_cost(video_id: str, engine: str = None) -> dict:
     }
 
 
-def get_history() -> list:
-    """Return a list of all projects with basic metadata for the history page."""
-    output_path = Path(config.OUTPUT_DIR)
-    if not output_path.exists():
-        return []
-
-    results = []
-    for d in sorted(output_path.iterdir(), reverse=True):
-        if not d.is_dir():
-            continue
-        source = load_step_data(d, STEP_FILES["source"])
-        assembly = load_step_data(d, STEP_FILES["assembly"])
-        title = ""
-        if source:
-            title = source.get("video_title", source.get("title", ""))
-        entry = {
-            "video_id": d.name,
-            "title": title or d.name,
-        }
-        if assembly:
-            entry["duration_sec"] = assembly.get("duration_sec", assembly.get("duration"))
-            size_bytes = assembly.get("file_size_bytes")
-            if size_bytes:
-                entry["file_size_mb"] = round(size_bytes / (1024 * 1024), 1)
-        # Check for thumbnail
-        thumb = d / "thumbnail.jpg"
-        entry["thumbnail"] = thumb.exists()
-        # Created date from source step file
-        source_file = d / STEP_FILES["source"]
-        if source_file.exists():
-            import datetime
-            mtime = source_file.stat().st_mtime
-            entry["created_at"] = datetime.datetime.fromtimestamp(mtime).isoformat()
-        results.append(entry)
-
-    return results

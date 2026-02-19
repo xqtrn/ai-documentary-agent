@@ -16,8 +16,58 @@ CLAUDE_MODEL = "claude-opus-4-6"
 
 # TTS (via Runway)
 RUNWAY_TTS_MODEL = "eleven_multilingual_v2"
-RUNWAY_TTS_VOICE = "Mark"
+# RUNWAY_TTS_VOICE = "Mark"
 RUNWAY_BASE_URL = "https://api.dev.runwayml.com/v1"
+
+# Voice Configuration (ElevenLabs via Runway)
+ELEVENLABS_VOICES = {
+    "george": {
+        "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+        "name": "George",
+        "description": "Deep, authoritative British male. Perfect for historical documentaries.",
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": True,
+    },
+    "daniel": {
+        "voice_id": "onwK4e9ZLuTAKqWW03F9",
+        "name": "Daniel",
+        "description": "Calm, clear British male. Great for educational content.",
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": True,
+    },
+    "brian": {
+        "voice_id": "nPczCjzI2devNBz1zQrb",
+        "name": "Brian",
+        "description": "Deep American male. Warm and engaging narration style.",
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": True,
+    },
+    "james": {
+        "voice_id": "ZQe5CZNOzWyzPSCn5a3c",
+        "name": "James",
+        "description": "Mature British male. Authoritative documentary narrator.",
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": True,
+    },
+    "liam": {
+        "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+        "name": "Liam",
+        "description": "Young, energetic male. Dynamic storytelling style.",
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": True,
+    },
+}
+DEFAULT_VOICE = "george"
 
 # Music & SFX (via Runway)
 RUNWAY_MUSIC_MODEL = "eleven_text_to_sound_v2"
