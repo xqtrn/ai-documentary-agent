@@ -167,7 +167,12 @@ SCRIPT CONTEXT:
 
 HISTORICAL ACCURACY RULES FOR {year} {location}:
 - YEAR ANCHOR: Every visual element must be labeled with the year. Example: "{year}-era limestone buildings" not just "buildings"
-- FLAGS: {flag_rule}
+- FLAG PROHIBITION — ZERO TOLERANCE:
+  NO crosses of any kind on any flag (no St George, no Maltese, no red cross, no white cross).
+  FRANCE 1789: ONLY plain WHITE rectangular fabric on wooden pole. NO symbols. NO pattern. Just solid white.
+  Tricolor did NOT exist in 1789 (introduced Sept 1790) — ZERO tricolor flags.
+  Empty sky is better than wrong flag.
+  Additional context: {flag_rule}
 - CLOTHING: {clothing_rule}
 - OBJECTS: {objects_rule}
 - ARCHITECTURE: {architecture_rule}
@@ -183,6 +188,7 @@ GROK IMAGINE V2 — KNOWN ISSUES TO PREVENT:
 - CROWD DIRECTION: All people must move in ONE unified direction. Say: "entire crowd surges LEFT TO RIGHT toward the fortress" — Grok defaults to random wandering
 - EXACT NUMBERS: "approximately 3000 people fill the cobblestone street" not "a large crowd"
 - BEAUTY RULE: always append "aesthetically beautiful cinematography, natural attractive human faces, no grotesque or distorted features, photorealistic skin textures"
+- TORCHES ONLY AT NIGHT. Daytime scenes (morning/afternoon): crowd carries pitchforks, pikes, wooden clubs, farming tools — ZERO torches. Storming of Bastille = daytime = no torches. Specify TIME OF DAY for each scene explicitly.
 
 FOR EACH SCENE — DESCRIBE ALL OF THESE DEPARTMENTS (this is why prompts must be 4080+ chars):
 
@@ -190,7 +196,7 @@ FOR EACH SCENE — DESCRIBE ALL OF THESE DEPARTMENTS (this is why prompts must b
 
 **SETTING & ARCHITECTURE ({year})**: Building materials (limestone/timber/brick), street width in meters, building height in stories, specific architectural details (mansard roofs/Gothic arches/wrought iron), what year these structures were built, what is NOT present (no Eiffel Tower, no Haussmann boulevards, no gas lamps if pre-1820), ground surface (wet cobblestones/mud/packed earth), debris and environmental detail
 
-**CROWD COMPOSITION**: Exact percentage breakdown (e.g., "60% working-class men, 25% women, 10% children, 5% bourgeoisie"), what each group is carrying (pitchforks/torches/bread/muskets/flags), their movement direction and speed
+**CROWD COMPOSITION**: Exact percentage breakdown (e.g., "60% working-class men, 25% women, 10% children, 5% bourgeoisie"), what each group is carrying (pitchforks/pikes/bread/muskets/wooden clubs — torches ONLY if nighttime), their movement direction and speed
 
 **COSTUMES ({year} — historically accurate)**: Fabric type for each social class (rough linen/wool/silk), specific garments (culottes/chemise/sabots/tricorn), colors (muted ochres/dark browns/dirty whites), condition (worn/torn/dirty), footwear, headwear, accessories. FORBIDDEN: zippers, elastic, synthetic fabrics, rubber soles, modern cuts
 
@@ -200,7 +206,7 @@ FOR EACH SCENE — DESCRIBE ALL OF THESE DEPARTMENTS (this is why prompts must b
 
 **ATMOSPHERE & WEATHER**: Season, temperature suggestion, wind direction and strength, particles in air (smoke density/dust/fog/rain), visibility distance in meters, smell suggestion (smoke/gunpowder/sweat/mud) for mood reference
 
-**MOTION LAYERS**: Camera movement speed and direction, crowd movement direction and speed, individual hero actions (woman in foreground pushes cart LEFT, man in midground raises torch RIGHT, child in background runs AWAY), environmental motion (flags rippling, smoke drifting, birds startling)
+**MOTION LAYERS**: Camera movement speed and direction, crowd movement direction and speed, individual hero actions (woman in foreground pushes cart LEFT, man in midground raises pike RIGHT, child in background runs AWAY), environmental motion (dust rising, smoke drifting, birds startling)
 
 **COLOR PALETTE**: Primary colors (desaturated ochre/dark charcoal/blood red), secondary colors (dirty white/rust/deep shadow), specific hex-level description if helpful, overall grade (warm golden hour/cold grey overcast/high-contrast torchlight)
 
@@ -212,13 +218,13 @@ FOR EACH SCENE — DESCRIBE ALL OF THESE DEPARTMENTS (this is why prompts must b
 Generate exactly 4 scenes following this structure:
 
 SCENE 1 (0:00-0:08) — EPIC AERIAL ESTABLISHING SHOT
-Drone descending from 200m altitude down to 15m above the crowd. We see revolutionary {location} from above — the density of {year}-era streets, smoke rising from multiple points. As drone descends, we begin to see individual faces and torches. Camera movement: slow vertical descent combined with slight northward drift.
+Drone descending from 200m altitude down to 15m above the crowd. DAYTIME — bright midday sun. We see revolutionary {location} from above — the density of {year}-era streets, dust and haze rising from the streets. As drone descends, we begin to see individual faces, raised fists, pitchforks, and pikes. NO torches (it is daytime). Camera movement: slow vertical descent combined with slight northward drift.
 
 SCENE 2 (0:08-0:16) — THE HUMAN COST
 Ground level steadicam moving through the crowd. We see the faces of the revolution — exhausted mothers, young men with hollow cheeks, elderly citizens who have waited decades. Contrast of desperate poverty against ornate {year} architecture. The camera weaves between individuals, each with their own story.
 
 SCENE 3 (0:16-0:24) — THE STORMING ACTION
-The crowd surges toward its target. Maximum kinetic energy. Tracking shot moving LEFT TO RIGHT with the crowd. Torches, screaming faces (at distance), weapons raised. This is the moment of historical rupture.
+The crowd surges toward its target. DAYTIME — afternoon sun. Maximum kinetic energy. Tracking shot moving LEFT TO RIGHT with the crowd. Pitchforks, pikes, wooden clubs, farming tools raised (NO torches — it is daytime). Determined faces (at distance), weapons raised. This is the moment of historical rupture.
 
 SCENE 4 (0:24-0:32) — THE AFTERMATH / RESOLUTION
 Slow crane pulling back and upward. The immediate aftermath — some jubilation, some shock, some grief. The camera rises to show the scale of what has happened — thousands of people, changed forever. Emotional, quiet, monumental.
