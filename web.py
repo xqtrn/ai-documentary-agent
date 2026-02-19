@@ -941,7 +941,112 @@ PROJECT_PAGE = """<!DOCTYPE html>
 
   <div class="section" id="sectionOutput">
     <h2><span class="num">6</span> Final Output</h2>
-    <video class="video-player" id="videoPlayer" controls></video>
+    <div style="position:relative;width:100%;" id="videoWrapper">
+      <video class="video-player" id="videoPlayer" controls></video>
+
+      <!-- ═══════════════ TIMELINE ANNOTATION BAR ═══════════════ -->
+      <div id="annotBar" style="
+        position:relative;
+        width:100%;
+        height:20px;
+        background:#0f0f1a;
+        border-radius:0 0 6px 6px;
+        cursor:crosshair;
+        margin-top:2px;
+        border:1px solid #2a2a3a;
+        overflow:visible;
+      " title="Click to add annotation at this time">
+
+        <!-- Hover time indicator -->
+        <div id="annotBarHover" style="
+          display:none;
+          position:absolute;
+          top:-24px;
+          background:#7c3aed;
+          color:white;
+          font-size:10px;
+          padding:2px 6px;
+          border-radius:4px;
+          pointer-events:none;
+          white-space:nowrap;
+          z-index:100;
+        "></div>
+
+        <!-- Hover "+" pill -->
+        <div id="annotBarPlus" style="
+          display:none;
+          position:absolute;
+          top:2px;
+          width:16px;
+          height:16px;
+          background:#7c3aed;
+          border-radius:50%;
+          color:white;
+          font-size:12px;
+          line-height:16px;
+          text-align:center;
+          pointer-events:none;
+          z-index:100;
+          transform:translateX(-50%);
+        ">+</div>
+
+        <!-- Annotation markers container -->
+        <div id="annotBarMarkers" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
+      </div>
+
+      <!-- Inline annotation popup -->
+      <div id="annotPopup" style="
+        display:none;
+        position:absolute;
+        background:#1a1a2e;
+        border:1px solid #7c3aed;
+        border-radius:10px;
+        padding:12px;
+        width:260px;
+        z-index:9999;
+        box-shadow:0 8px 32px rgba(0,0,0,0.6);
+      ">
+        <div id="annotPopupTime" style="color:#a78bfa;font-size:11px;margin-bottom:6px;font-weight:600;"></div>
+        <textarea id="annotPopupText"
+          placeholder="What's wrong here? e.g. 'Flag colors incorrect', 'Modern shoe visible'..."
+          style="
+            width:100%;
+            height:64px;
+            background:#0f0f1a;
+            color:#e2e8f0;
+            border:1px solid #444;
+            border-radius:6px;
+            padding:8px;
+            font-size:12px;
+            resize:none;
+            outline:none;
+            box-sizing:border-box;
+            font-family:inherit;
+          "></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button onclick="saveAnnotFromPopup()" style="
+            flex:1;
+            background:#7c3aed;
+            color:white;
+            border:none;
+            padding:6px;
+            border-radius:6px;
+            cursor:pointer;
+            font-size:12px;
+            font-weight:600;
+          ">Save</button>
+          <button onclick="closeAnnotPopup()" style="
+            background:#374151;
+            color:#ccc;
+            border:none;
+            padding:6px 10px;
+            border-radius:6px;
+            cursor:pointer;
+            font-size:12px;
+          ">X</button>
+        </div>
+      </div>
+    </div>
     <div class="output-meta" id="outputMeta"></div>
     <div class="download-row" id="downloadRow"></div>
   </div>
@@ -1206,6 +1311,8 @@ function renderOutput(data){
   if(assembly.clips_used) html += "<span>"+assembly.clips_used+" clips</span>";
   meta.innerHTML = html;
   document.getElementById("downloadRow").innerHTML = '<a class="btn" href="'+src+'" download>Download Video</a>';
+  _initAnnotBar();
+  renderAnnotBarMarkers();
 }
 
 function renderProject(data){
@@ -1381,12 +1488,16 @@ async function pollSceneRetry(){
 }
 
 // --- Annotations ---
+var _currentAnnotations = [];
+
 async function loadAnnotations(){
   try{
     var resp = await apiFetch("/project/"+VIDEO_ID+"/annotations");
     if(!resp.ok) return;
     var data = await resp.json();
-    renderAnnotations(data.annotations || []);
+    _currentAnnotations = data.annotations || [];
+    renderAnnotations(_currentAnnotations);
+    renderAnnotBarMarkers();
   }catch(e){}
 }
 
@@ -1396,7 +1507,7 @@ function renderAnnotations(annotations){
   el.innerHTML = annotations.map(function(a){
     return '<div style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:12px;display:flex;gap:12px;align-items:flex-start">'+
       '<div style="flex:1;min-width:0">'+
-        '<div style="font-size:12px;color:#888;margin-bottom:4px">Scene '+a.scene_number+(a.created_at?' &mdash; '+a.created_at.split("T")[0]:'')+'</div>'+
+        '<div style="font-size:12px;color:#888;margin-bottom:4px">' + (a.frame_time ? _fmtTime(a.frame_time) + " &middot; " : "") + 'Scene '+a.scene_number+(a.created_at?' &mdash; '+a.created_at.split("T")[0]:'')+'</div>'+
         '<div style="font-size:13px;color:#ccc">'+escHtml(a.notes)+'</div>'+
         (a.tags&&a.tags.length?'<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">'+a.tags.map(function(t){return'<span style="background:#23233a;color:#aaa;padding:2px 8px;border-radius:4px;font-size:11px">'+escHtml(t)+'</span>'}).join("")+'</div>':'')+
       '</div>'+
@@ -1484,7 +1595,186 @@ async function loadIterations(){
   }catch(e){}
 }
 
+// ═══════════════ TIMELINE ANNOTATION BAR ═══════════════════════════════════
+
+var _annotBarActive = false;
+var _annotBarTs = 0;
+
+function _fmtTime(sec) {
+  var m = Math.floor(sec / 60);
+  var s = Math.floor(sec % 60);
+  return m + ":" + (s < 10 ? "0" : "") + s;
+}
+
+function _getVideoDuration() {
+  var v = document.getElementById("videoPlayer");
+  return (v && v.duration && !isNaN(v.duration)) ? v.duration : 30;
+}
+
+function _getSceneCount() {
+  if (projectData && projectData.scenes && projectData.scenes.scenes) return projectData.scenes.scenes.length;
+  return 4;
+}
+
+function _initAnnotBar() {
+  var bar = document.getElementById("annotBar");
+  if (!bar || bar._annotBarInit) return;
+  bar._annotBarInit = true;
+
+  bar.addEventListener("mousemove", function(e) {
+    if (_annotBarActive) return;
+    var hover = document.getElementById("annotBarHover");
+    var plus = document.getElementById("annotBarPlus");
+    var rect = bar.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var ratio = Math.max(0, Math.min(1, x / rect.width));
+    var ts = ratio * _getVideoDuration();
+
+    hover.textContent = _fmtTime(ts) + " — click to annotate";
+    hover.style.display = "block";
+    hover.style.left = Math.min(x, rect.width - 140) + "px";
+
+    plus.style.display = "block";
+    plus.style.left = x + "px";
+  });
+
+  bar.addEventListener("mouseleave", function() {
+    if (_annotBarActive) return;
+    document.getElementById("annotBarHover").style.display = "none";
+    document.getElementById("annotBarPlus").style.display = "none";
+  });
+
+  bar.addEventListener("click", function(e) {
+    if (_annotBarActive) { closeAnnotPopup(); return; }
+    var rect = bar.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var ratio = Math.max(0, Math.min(1, x / rect.width));
+    var ts = ratio * _getVideoDuration();
+    _annotBarTs = ts;
+
+    // Pause video at this point
+    var v = document.getElementById("videoPlayer");
+    if (v) { v.currentTime = ts; v.pause(); }
+
+    // Position popup below annotBar
+    var wrapper = document.getElementById("videoWrapper");
+    var wrapRect = wrapper.getBoundingClientRect();
+    var px = e.clientX - wrapRect.left;
+    var py = bar.offsetTop + bar.offsetHeight + 4;
+    var popupW = 260;
+    if (px + popupW > wrapRect.width) px = wrapRect.width - popupW - 8;
+    if (px < 8) px = 8;
+
+    var popup = document.getElementById("annotPopup");
+    popup.style.left = px + "px";
+    popup.style.top = py + "px";
+    popup.style.display = "block";
+
+    var sc = _getSceneCount();
+    var sceneNum = Math.min(sc, Math.floor(ts / (_getVideoDuration() / sc)) + 1);
+    document.getElementById("annotPopupTime").textContent = _fmtTime(ts) + " (Scene " + sceneNum + ")";
+    document.getElementById("annotPopupText").value = "";
+    document.getElementById("annotPopupText").focus();
+
+    _annotBarActive = true;
+    document.getElementById("annotBarHover").style.display = "none";
+    document.getElementById("annotBarPlus").style.display = "none";
+    e.stopPropagation();
+  });
+}
+
+document.addEventListener("click", function(e) {
+  var popup = document.getElementById("annotPopup");
+  if (popup && popup.style.display !== "none" && !popup.contains(e.target)) {
+    closeAnnotPopup();
+  }
+});
+
+function closeAnnotPopup() {
+  document.getElementById("annotPopup").style.display = "none";
+  _annotBarActive = false;
+}
+
+async function saveAnnotFromPopup() {
+  var text = document.getElementById("annotPopupText").value.trim();
+  if (!text) {
+    var ta = document.getElementById("annotPopupText");
+    ta.style.border = "1px solid #ef4444";
+    ta.focus();
+    setTimeout(function(){ ta.style.border = "1px solid #444"; }, 1500);
+    return;
+  }
+  var ts = _annotBarTs;
+  var duration = _getVideoDuration();
+  var sc = _getSceneCount();
+  var sceneNum = Math.min(sc, Math.floor(ts / (duration / sc)) + 1);
+
+  try {
+    var resp = await apiPost("/project/" + VIDEO_ID + "/annotations", {
+      scene_number: sceneNum,
+      frame_time: ts,
+      notes: text,
+      tags: []
+    });
+    if (!resp.ok) {
+      var d = await resp.json();
+      alert("Error: " + (d.detail || "Failed to save"));
+      return;
+    }
+    closeAnnotPopup();
+    loadAnnotations();
+  } catch(ex) {
+    alert("Error: " + ex.message);
+  }
+}
+
+function renderAnnotBarMarkers() {
+  var container = document.getElementById("annotBarMarkers");
+  if (!container) return;
+  if (!_currentAnnotations || !_currentAnnotations.length) { container.innerHTML = ""; return; }
+
+  var duration = _getVideoDuration();
+  var colors = ["#a855f7", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+
+  container.innerHTML = _currentAnnotations.map(function(ann, i) {
+    var ts = ann.frame_time || 0;
+    var pct = Math.max(0, Math.min(100, (ts / duration) * 100));
+    var color = colors[i % colors.length];
+    var label = (ann.notes || "").substring(0, 40) + (ann.notes && ann.notes.length > 40 ? "..." : "");
+    return '<div style="'+
+      'position:absolute;'+
+      'left:' + pct + '%;'+
+      'top:0;'+
+      'width:3px;'+
+      'height:100%;'+
+      'background:' + color + ';'+
+      'transform:translateX(-50%);'+
+      'pointer-events:auto;'+
+      'cursor:pointer;'+
+      'z-index:10;'+
+      '" title="' + _fmtTime(ts) + ': ' + label.replace(/"/g, '&quot;') + '" onclick="seekToAnnot('+ts+')">'+
+      '<div style="'+
+        'position:absolute;'+
+        'top:-5px;'+
+        'left:50%;'+
+        'transform:translateX(-50%);'+
+        'width:9px;'+
+        'height:9px;'+
+        'background:' + color + ';'+
+        'border-radius:50%;'+
+        'border:1.5px solid #fff;'+
+      '"></div>'+
+    '</div>';
+  }).join("");
+}
+
+function seekToAnnot(ts) {
+  var v = document.getElementById("videoPlayer");
+  if (v) { v.currentTime = ts; v.pause(); }
+}
+
 // --- Init ---
+_initAnnotBar();
 pollProject();
 pollTimer = setInterval(pollProject, 3000);
 loadVoices();
