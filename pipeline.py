@@ -829,3 +829,41 @@ def estimate_cost(video_id: str, engine: str = None) -> dict:
         "music_credits": round(music_credits, 1),
         "total_credits": round(total_credits, 1),
     }
+
+
+def get_history() -> list:
+    """Return a list of all projects with basic metadata for the history page."""
+    output_path = Path(config.OUTPUT_DIR)
+    if not output_path.exists():
+        return []
+
+    results = []
+    for d in sorted(output_path.iterdir(), reverse=True):
+        if not d.is_dir():
+            continue
+        source = load_step_data(d, STEP_FILES["source"])
+        assembly = load_step_data(d, STEP_FILES["assembly"])
+        title = ""
+        if source:
+            title = source.get("video_title", source.get("title", ""))
+        entry = {
+            "video_id": d.name,
+            "title": title or d.name,
+        }
+        if assembly:
+            entry["duration_sec"] = assembly.get("duration_sec", assembly.get("duration"))
+            size_bytes = assembly.get("file_size_bytes")
+            if size_bytes:
+                entry["file_size_mb"] = round(size_bytes / (1024 * 1024), 1)
+        # Check for thumbnail
+        thumb = d / "thumbnail.jpg"
+        entry["thumbnail"] = thumb.exists()
+        # Created date from source step file
+        source_file = d / STEP_FILES["source"]
+        if source_file.exists():
+            import datetime
+            mtime = source_file.stat().st_mtime
+            entry["created_at"] = datetime.datetime.fromtimestamp(mtime).isoformat()
+        results.append(entry)
+
+    return results

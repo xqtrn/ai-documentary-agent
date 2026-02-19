@@ -321,6 +321,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 <div class="header">
   <h1>AI Documentary Agent V3</h1>
   <div class="links">
+    <a id="historyLink" href="/history" style="color:#c4b5fd;font-size:14px">History</a>
     <span style="color:#888;font-size:13px" id="userLabel"></span>
     <a href="/logout" id="logoutLink" style="display:none">Logout</a>
   </div>
@@ -558,10 +559,138 @@ async function loadHistory() {
 if(AUTH_MODE !== "test"){
   document.getElementById("logoutLink").style.display="inline";
   document.getElementById("userLabel").textContent="{{username}}";
+} else {
+  document.getElementById("historyLink").href = "/history?secret=" + SECRET;
 }
 initEngineSelect();
 loadProjects();
 setInterval(loadProjects, 8000);
+</script>
+</body>
+</html>"""
+
+HISTORY_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>History — AI Documentary Agent</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0a0f;color:#e4e4e7;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh}
+  a{color:#8b5cf6;text-decoration:none} a:hover{text-decoration:underline}
+
+  .header{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;
+          border-bottom:1px solid #2a2a3a;background:#13131a}
+  .header h1{font-size:20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+              -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .header .links{display:flex;gap:16px;font-size:14px;align-items:center}
+
+  .container{max-width:960px;margin:0 auto;padding:32px 16px}
+
+  .card{background:#13131a;border:1px solid #2a2a3a;border-radius:12px;padding:24px;margin-bottom:24px}
+  .card h2{font-size:18px;margin-bottom:16px;color:#c4b5fd}
+
+  .history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+  .history-card{background:#1a1a24;border:1px solid #2a2a3a;border-radius:10px;overflow:hidden;
+                cursor:pointer;transition:border-color 0.2s}
+  .history-card:hover{border-color:#6366f1}
+  .history-thumb{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}
+  .history-body{padding:14px}
+  .history-title{font-size:14px;font-weight:600;margin-bottom:4px;white-space:nowrap;
+                  overflow:hidden;text-overflow:ellipsis}
+  .history-meta{font-size:12px;color:#888;display:flex;gap:8px;flex-wrap:wrap}
+  .history-meta span{background:#23233a;padding:2px 8px;border-radius:4px}
+
+  .empty{text-align:center;color:#555;padding:32px;font-size:14px}
+  .loading{text-align:center;padding:48px;color:#555}
+  .spinner{display:inline-block;width:32px;height:32px;border:3px solid #2a2a3a;
+           border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>AI Documentary Agent</h1>
+  <div class="links">
+    <a id="dashLink" href="/" style="color:#c4b5fd">Dashboard</a>
+    <span style="color:#888;font-size:13px" id="userLabel"></span>
+    <a href="/logout" id="logoutLink" style="display:none">Logout</a>
+  </div>
+</div>
+<div class="container">
+  <div class="card">
+    <h2>Video History</h2>
+    <div id="historyGrid" class="history-grid">
+      <div class="loading"><div class="spinner"></div><p style="margin-top:16px">Loading history...</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var AUTH_MODE = "{{auth_mode}}";
+var SECRET = "{{secret}}";
+
+function apiUrl(path) {
+  if(AUTH_MODE === "test") return "/api/test" + path + (path.indexOf("?") >= 0 ? "&" : "?") + "secret=" + SECRET;
+  return "/api" + path;
+}
+function projectUrl(vid) {
+  if(AUTH_MODE === "test") return "/project/" + vid + "?secret=" + SECRET;
+  return "/project/" + vid;
+}
+function fileUrl(path) {
+  if(AUTH_MODE === "test") return "/api/test/file?secret=" + SECRET + "&path=" + encodeURIComponent(path);
+  return "/download/" + encodeURIComponent(path);
+}
+function escHtml(s) {
+  if(!s) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+async function loadHistory() {
+  try {
+    var resp = await fetch(apiUrl("/history"));
+    if(!resp.ok) return;
+    var data = await resp.json();
+    var items = data.history || data || [];
+    var grid = document.getElementById("historyGrid");
+    if(!items.length){
+      grid.innerHTML = '<div class="empty">No videos generated yet.</div>';
+      return;
+    }
+    grid.innerHTML = items.map(function(h){
+      var vid = h.video_id || "";
+      var title = h.title || vid;
+      var dur = h.duration_sec ? Math.round(h.duration_sec) + "s" : "";
+      var size = h.file_size_mb ? h.file_size_mb + " MB" : "";
+      var date = h.created_at ? h.created_at.split("T")[0] : "";
+      var thumbSrc = h.thumbnail ? fileUrl(vid + "/thumbnail.jpg") : "";
+      var thumbHtml = thumbSrc
+        ? '<img class="history-thumb" src="' + thumbSrc + '" alt="" loading="lazy" onerror="this.style.background=\\'#1a1a24\\';this.alt=\\'No thumbnail\\'">'
+        : '<div class="history-thumb" style="background:#1a1a24;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px">No thumbnail</div>';
+      return '<div class="history-card" onclick="window.location.href=projectUrl(\\'' + vid + '\\')">' +
+        thumbHtml +
+        '<div class="history-body">' +
+          '<div class="history-title">' + escHtml(title) + '</div>' +
+          '<div class="history-meta">' +
+            (dur ? '<span>' + dur + '</span>' : '') +
+            (size ? '<span>' + size + '</span>' : '') +
+            (date ? '<span>' + date + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+  } catch(e){console.error("loadHistory",e)}
+}
+
+if(AUTH_MODE !== "test"){
+  document.getElementById("logoutLink").style.display="inline";
+  document.getElementById("userLabel").textContent="{{username}}";
+} else {
+  document.getElementById("dashLink").href = "/dashboard?secret=" + SECRET;
+}
+loadHistory();
 </script>
 </body>
 </html>"""
@@ -1047,6 +1176,14 @@ def render_dashboard(auth_mode: str = "telegram", secret: str = "", username: st
     return html
 
 
+def render_history_page(auth_mode: str = "telegram", secret: str = "", username: str = "") -> str:
+    html = HISTORY_PAGE
+    html = html.replace("{{auth_mode}}", auth_mode)
+    html = html.replace("{{secret}}", secret)
+    html = html.replace("{{username}}", username)
+    return html
+
+
 def render_project_page(video_id: str, auth_mode: str = "telegram", secret: str = "") -> str:
     html = PROJECT_PAGE
     html = html.replace("{{video_id}}", video_id)
@@ -1076,6 +1213,16 @@ async def dashboard(request: Request, secret: str = ""):
         return HTMLResponse(render_dashboard(auth_mode="telegram", username=user.get("first_name", "User")))
     if secret and verify_test_secret(secret):
         return HTMLResponse(render_dashboard(auth_mode="test", secret=secret))
+    return RedirectResponse("/")
+
+
+@app.get("/history", response_class=HTMLResponse)
+async def history_page(request: Request, secret: str = ""):
+    user = get_current_user(request)
+    if user:
+        return HTMLResponse(render_history_page(auth_mode="telegram", username=user.get("first_name", "User")))
+    if secret and verify_test_secret(secret):
+        return HTMLResponse(render_history_page(auth_mode="test", secret=secret))
     return RedirectResponse("/")
 
 
@@ -1278,6 +1425,13 @@ async def test_file_download(secret: str = "", path: str = ""):
     if not safe_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(str(safe_path))
+
+
+@app.get("/api/test/history")
+async def test_history(secret: str = ""):
+    if not verify_test_secret(secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    return {"history": get_history()}
 
 
 @app.post("/api/test/project/{video_id}/cancel")
