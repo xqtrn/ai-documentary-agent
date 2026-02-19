@@ -549,7 +549,7 @@ def split_into_scenes(script_data: dict, output_dir, engine: str = None) -> dict
     engine = engine or config.DEFAULT_ENGINE
     engine_cfg = config.ENGINE_CONFIG.get(engine, {})
     max_prompt_chars = engine_cfg.get("max_prompt_chars", 1000)
-    scene_duration = engine_cfg.get("max_duration_sec", 10)
+    scene_duration = config.SCENE_DURATION_SEC
 
     output_dir = Path(output_dir)
     logger.info("Splitting script into scenes for engine=%s (max_prompt=%s)...", engine, max_prompt_chars)
