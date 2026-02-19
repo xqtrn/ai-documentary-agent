@@ -969,13 +969,15 @@ def split_into_scenes(script_data: dict, output_dir, engine: str = None,
             architecture_rule=architecture_rule,
         )
 
-        logger.info("V2 ENHANCED: Prompt template filled — %d chars, sending to Claude...", len(prompt))
+        logger.info("V2 ENHANCED: Prompt template filled — %d chars, sending to Claude (streaming)...", len(prompt))
 
-        response = client.messages.create(
+        # Use streaming to avoid SDK timeout for long generation (4x 4080-char prompts)
+        with client.messages.stream(
             model=config.CLAUDE_MODEL,
             max_tokens=32768,
             messages=[{"role": "user", "content": prompt}],
-        )
+        ) as stream:
+            response = stream.get_final_message()
 
         raw_text = response.content[0].text
         logger.info("V2 ENHANCED: Claude response — %d chars", len(raw_text))
