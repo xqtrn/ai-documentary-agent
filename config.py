@@ -66,7 +66,7 @@ ENGINE_CONFIG = {
         "max_duration_sec": 12,
         "has_native_audio": False,
         "cost_per_sec": 0,
-        "resolution": "1792x1024",
+        "resolution": "1280x720",
     },
     "gen4.5": {
         "provider": "runway",
