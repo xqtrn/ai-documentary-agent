@@ -123,8 +123,9 @@ def _generate_sora_video(prompt: str, duration: int, video_path: Path, engine_cf
         raise RuntimeError(f"Sora returned no video id: {data}")
     logger.info("Sora video %s created, polling...", video_id)
 
-    # Step 2: Poll for completion
-    deadline = time.time() + 600  # 10 min max
+    # Step 2: Poll for completion (20 min — Sora Pro 12s clips can take 10-15 min)
+    poll_timeout = 1200
+    deadline = time.time() + poll_timeout
     while time.time() < deadline:
         with httpx.Client(timeout=30.0) as http:
             resp = http.get(f"{base_url}/videos/{video_id}", headers=headers)
@@ -136,10 +137,11 @@ def _generate_sora_video(prompt: str, duration: int, video_path: Path, engine_cf
             break
         if status in ("failed", "error"):
             raise RuntimeError(f"Sora video failed: {data}")
-        logger.debug("Sora video %s status: %s", video_id, status)
-        time.sleep(5)
+        elapsed = int(time.time() + poll_timeout - deadline + poll_timeout - (deadline - time.time()))
+        logger.debug("Sora video %s status: %s (%.0fs elapsed)", video_id, status, poll_timeout - (deadline - time.time()))
+        time.sleep(10)
     else:
-        raise TimeoutError(f"Sora video {video_id} did not complete within 600s")
+        raise TimeoutError(f"Sora video {video_id} did not complete within {poll_timeout}s")
 
     # Step 3: Download content
     with httpx.Client(timeout=30.0) as http:
