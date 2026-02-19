@@ -27,6 +27,7 @@ from scripts.source_analyzer import analyze_source
 from scripts.virality_analyzer import analyze_virality
 from scripts.scriptwriter import rewrite_script
 from scripts.scene_splitter import split_into_scenes
+from scripts.scene_splitter_v2 import split_into_scenes as split_into_scenes_v2
 from scripts.video_gen import generate_videos, generate_single_scene
 from scripts.voiceover import generate_audio
 from scripts.music_gen import generate_music
@@ -295,7 +296,8 @@ def get_history_record(video_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def run_pipeline(url: str, *, resume: bool = True, engine: str = None,
-                  video_id: str = None, voice_key: str = None) -> dict:
+                  video_id: str = None, voice_key: str = None,
+                  enhanced_prompts: bool = False) -> dict:
     """Run the complete 9-step pipeline.
 
     Parameters
@@ -310,7 +312,11 @@ def run_pipeline(url: str, *, resume: bool = True, engine: str = None,
         Override video_id (for unique runs per engine). If None, extracted from URL.
     voice_key : str
         Voice key for TTS. Defaults to config.DEFAULT_VOICE.
+    enhanced_prompts : bool
+        If True, use scene_splitter_v2 with year-anchored anti-hallucination prompts.
     """
+    # Resolve enhanced_prompts: param overrides config default
+    use_enhanced = enhanced_prompts or config.USE_ENHANCED_PROMPTS
     engine = engine or config.DEFAULT_ENGINE
     _pipeline_cancel.clear()
     clear_log_buffer()
@@ -367,8 +373,12 @@ def run_pipeline(url: str, *, resume: bool = True, engine: str = None,
         write_status(step="scenes", step_number=4, message="Splitting into scenes…", progress=33.0)
         scenes_data = load_step_data(output_dir, STEP_FILES["scenes"]) if resume else None
         if scenes_data is None:
-            logger.info("Step 4/9: Scene splitting (engine=%s).", engine)
-            scenes_data = split_into_scenes(script_data, output_dir, engine=engine)
+            if use_enhanced:
+                logger.info("Step 4/9: Scene splitting V2 — enhanced prompts (engine=%s).", engine)
+                scenes_data = split_into_scenes_v2(script_data, output_dir, engine=engine, source_data=source_data)
+            else:
+                logger.info("Step 4/9: Scene splitting (engine=%s).", engine)
+                scenes_data = split_into_scenes(script_data, output_dir, engine=engine)
             save_checkpoint(output_dir, STEP_FILES["scenes"], scenes_data)
         else:
             logger.info("Step 4/9: Scenes — loaded from checkpoint.")
