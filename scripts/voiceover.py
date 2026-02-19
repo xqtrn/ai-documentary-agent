@@ -1,6 +1,6 @@
-"""Voiceover + SFX generation using Runway API (ElevenLabs via Runway).
+"""Voiceover + SFX generation using Runway API.
 
-TTS: eleven_multilingual_v2 — natural documentary narration
+TTS: eleven_multilingual_v2 — natural documentary narration (Runway preset voices)
 SFX: eleven_text_to_sound_v2 — per-scene ambient sound effects
 """
 
@@ -19,6 +19,17 @@ import config
 logger = logging.getLogger(__name__)
 
 MAX_TTS_CHARS = 1000  # Runway TTS limit per request
+
+# Mapping of voice keys to Runway preset voice names
+# See: https://docs.dev.runwayml.com/api
+VOICE_KEY_TO_PRESET = {
+    "george": "Mark",       # Deep, authoritative male
+    "daniel": "James",      # Calm, clear male
+    "brian": "Bernard",     # Deep American male
+    "james": "James",       # Mature British male
+    "liam": "Noah",         # Young, energetic male
+}
+DEFAULT_PRESET = "Mark"
 
 
 def _split_script_into_chunks(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
@@ -105,20 +116,12 @@ def _concatenate_audio(file_paths: list[Path], output_path: Path) -> Path:
     return output_path
 
 
-def _get_voice_config(voice_key: str | None = None) -> dict:
-    """Get voice configuration for TTS. Returns voice_id and settings."""
-    voice_key = voice_key or config.DEFAULT_VOICE
-    voices = getattr(config, "ELEVENLABS_VOICES", {})
-    if voice_key not in voices:
-        logger.warning("Voice key '%s' not found, falling back to '%s'", voice_key, config.DEFAULT_VOICE)
-        voice_key = config.DEFAULT_VOICE
-    if voice_key not in voices:
-        # Ultimate fallback to first available voice
-        if voices:
-            voice_key = next(iter(voices))
-        else:
-            return {"voice_id": "JBFqnCBsd6RMkjVDRZzb", "name": "George"}
-    return voices[voice_key]
+def _get_preset_voice(voice_key: str | None = None) -> str:
+    """Get Runway preset voice name from voice key."""
+    voice_key = (voice_key or config.DEFAULT_VOICE).lower()
+    preset = VOICE_KEY_TO_PRESET.get(voice_key, DEFAULT_PRESET)
+    logger.info("Voice key '%s' -> Runway preset '%s'", voice_key, preset)
+    return preset
 
 
 def generate_voiceover(script_text: str, output_dir, voice_key: str | None = None) -> Path:
@@ -131,7 +134,7 @@ def generate_voiceover(script_text: str, output_dir, voice_key: str | None = Non
     output_dir : path-like
         Directory to save output audio.
     voice_key : str, optional
-        Key into config.ELEVENLABS_VOICES (e.g. 'george', 'daniel').
+        Key for voice selection (mapped to Runway preset).
         Defaults to config.DEFAULT_VOICE.
     """
     config.check_api_key("RUNWAY_API_KEY")
@@ -140,11 +143,9 @@ def generate_voiceover(script_text: str, output_dir, voice_key: str | None = Non
 
     client = RunwayML(api_key=config.RUNWAY_API_KEY)
 
-    # Resolve voice
-    voice_cfg = _get_voice_config(voice_key)
-    voice_id = voice_cfg["voice_id"]
-    voice_name = voice_cfg.get("name", voice_key or "default")
-    logger.info("Using voice: %s (id=%s)", voice_name, voice_id)
+    # Resolve voice to Runway preset
+    preset_name = _get_preset_voice(voice_key)
+    logger.info("Using Runway preset voice: %s", preset_name)
 
     # Clean script markers
     clean_text = script_text
@@ -167,12 +168,8 @@ def generate_voiceover(script_text: str, output_dir, voice_key: str | None = Non
                 model=config.RUNWAY_TTS_MODEL,
                 prompt_text=chunk_text,
                 voice={
-                    "type": "elevenlabs",
-                    "voiceId": voice_id,
-                    "stability": voice_cfg.get("stability", 0.5),
-                    "similarity_boost": voice_cfg.get("similarity_boost", 0.75),
-                    "style": voice_cfg.get("style", 0.0),
-                    "use_speaker_boost": voice_cfg.get("use_speaker_boost", True),
+                    "type": "runway-preset",
+                    "presetId": preset_name,
                 },
             )
         except Exception as exc:
@@ -197,7 +194,7 @@ def generate_voiceover(script_text: str, output_dir, voice_key: str | None = Non
         for cp in chunk_paths:
             cp.unlink(missing_ok=True)
 
-    logger.info("Voiceover complete: %s (voice=%s)", final_path, voice_name)
+    logger.info("Voiceover complete: %s (voice=%s, preset=%s)", final_path, voice_key, preset_name)
     return final_path
 
 
@@ -288,7 +285,7 @@ def generate_audio(script_data: dict, scenes_data: dict, output_dir, voice_key: 
     Parameters
     ----------
     voice_key : str, optional
-        Key into config.ELEVENLABS_VOICES for voice selection.
+        Key for voice selection (mapped to Runway preset).
     """
     output_dir = Path(output_dir)
     audio_dir = output_dir / "audio"
