@@ -61,114 +61,82 @@ OUTPUT: Return ONLY a valid JSON array, no markdown.
   }}
 ]"""
 
-SCENE_PROMPT_LONG = """You are an Oscar-winning film director, cinematographer, and production designer creating ULTRA-DETAILED visual prompts for Grok Imagine, xAI's text-to-video AI. Each prompt must be so detailed that a blind person could reconstruct the exact frame.
+SCENE_PROMPT_LONG = """You are a world-class cinematic director creating prompts for an AI video model. Every scene must look indistinguishable from a real Hollywood film. You MUST follow ALL 15 anti-hallucination rules below — violations produce unwatchable AI artifacts.
 
 SCRIPT:
 {script}
 
 TASK: Break this script into EXACTLY {scene_count} scenes, each {scene_duration} seconds long.
 
+================================================================
+15 MANDATORY ANTI-HALLUCINATION RULES → NOW 18 RULES
+================================================================
+
+RULE 1 — STATE YEAR AND LOCATION: Begin every visual_prompt with "France, 1789."
+RULE 2 — NO FAMOUS BUILDINGS OR CITIES: NEVER write "Bastille", "Notre Dame", "Versailles", "Paris", "Tuileries". Use ONLY generic descriptions: "narrow European cobblestone street lined with 4-story limestone buildings with slate rooftops"
+RULE 3 — NO MODERN EQUIPMENT: Explicitly ban: "NO film cameras, cranes, tripods, microphones, electric lights, modern vehicles, glasses, wristwatches, modern hairstyles, rubber shoes, zippers, synthetic fabrics"
+RULE 4 — EVERY PERSON UNIQUELY DRESSED: Describe 5+ individuals with "varied colors (brown, grey, tan, off-white, faded blue), different states of wear, different hat types, NO TWO PEOPLE identical in clothing or pose"
+RULE 5 — NO CLOSE-UP FACES: "waist-up minimum, NEVER extreme close-up of any face"
+RULE 6 — CORRECT FLAG COLORS: "THREE VERTICAL STRIPES: dark navy blue on left, pure white center, bright crimson red on right. NO yellow, NO orange, NO green, NO horizontal stripes"
+RULE 7 — CORRECT MILITARY UNIFORMS: "white wool coats with blue lapels and red collar trim, white breeches, black boots, tall black bicorn hats, Charleville muskets with bayonets. NO green uniforms, NO red coats, NO camouflage, NO modern helmets"
+RULE 8 — NO SYMMETRY: "Asymmetric organic composition — crowd denser on left, buildings vary in height, people at different distances from camera"
+RULE 9 — EVERY PERSON UNIQUE ACTION: Describe at least 5 individuals doing different things: "woman carrying ceramic jug stumbling, old man leaning on walking stick shouting, young boy running between legs, man pushing handcart with sacks, woman holding infant wrapped in shawl"
+RULE 10 — NO TEXT/SIGNS/SYMBOLS: "absolutely NO letters, NO words, NO numbers, NO shop names, NO banners with writing, NO icons, NO symbols floating in air, NO digital artifacts, NO geometric shapes, NO watermarks, NO X marks"
+RULE 11 — FILL EVERY FRAME: "FOREGROUND (0-5m): 3-4 specific individuals with unique clothing and actions. MIDGROUND (5-30m): dense crowd of 200+ people filling street wall-to-wall. BACKGROUND (30m+): building facades with open shuttered windows, rooftops with chimney smoke, sky with clouds"
+RULE 12 — SPECIFY EXACT MOTION: "entire crowd moves RIGHT TO LEFT in unified surge. Camera tracks alongside at walking pace. Smoke drifts left to right from west wind. Flags on pikes wave eastward. Torch flames bend in wind direction"
+RULE 13 — NATURAL LIGHTING ONLY: "overcast grey daylight OR warm golden-hour amber sunlight. Orange flickering torchlight from hand-held torches. Candlelight glow from windows. NO electric lights, NO studio lighting, NO fluorescent, NO neon"
+RULE 14 — GROUND-LEVEL REALISM: "uneven wet cobblestones with puddles reflecting light, scattered straw and hay, mud patches, fallen leaves, knocked-over wooden barrel, horse manure, worn stone curbs, iron drain grates"
+RULE 15 — ATMOSPHERIC DEPTH: "light grey haze increases with distance, buildings 100m+ away desaturated and softer, dust particles visible in light shafts from gaps between buildings, smoke from fires adds layered depth to background"
+RULE 16 — CONSTANT CAMERA MOTION: Camera NEVER static. Every shot uses dolly, crane, steadicam, or drone movement. Specify exact direction and speed: "steadicam pushing forward at walking pace", "crane descending 2 meters over 8 seconds", "drone tracking left-to-right". Static tripod shots are FORBIDDEN.
+RULE 17 — ZERO FROZEN PEOPLE: Every single person in frame MUST be in motion. Foreground people: running, stumbling, shouting with open mouths, swinging arms, pushing. Midground crowd: surging as a mass, arms raised, bobbing heads. Background: silhouettes moving across rooftops, leaning from windows. If a person is standing still, they are WRONG — give them an action.
+RULE 18 — VISIBLE EMOTIONS IN FOREGROUND: The 3-4 foreground characters (0-5m from camera) must show CLEAR facial emotions visible to viewer: "determined gaze, furrowed brow with concentration, lips pressed tightly in resolve, eyes wide absorbing the chaos, weathered face showing years of hardship, quiet dignity mixed with rising anger". Emotions should be REAL and HUMAN — not exaggerated theatrical screaming. Think Kubrick's Barry Lyndon or Ridley Scott's Napoleon — restrained intensity, not comic book.
+
+================================================================
+
 For each scene provide:
 1. **scene_number**: Sequential number (1 through {scene_count})
 2. **narration**: The exact narration text for this scene
-3. **visual_prompt**: ULTRA-DETAILED cinematic prompt — MUST be EXACTLY 4080-4090 characters. THIS IS NON-NEGOTIABLE. Count precisely. If your prompt is under 4000 characters, ADD MORE DETAIL until you reach 4080. Under 4000 chars = FAILURE.
+3. **visual_prompt**: A richly detailed cinematic video prompt (TARGET: 3500-3900 characters, MAX {max_prompt_chars}). Must follow ALL 18 rules above.
 4. **camera**: Specific camera movement
 5. **lighting**: Specific lighting setup
 6. **mood**: Emotional mood
-7. **sfx_prompt**: Atmospheric sound effects
+7. **sfx_prompt**: Atmospheric sound effects for Runway audio sync
 8. **duration_sec**: {scene_duration}
 
-================================================================
-VISUAL PROMPT LENGTH: EXACTLY 4080-4090 CHARACTERS PER SCENE
-================================================================
+VISUAL PROMPT STRUCTURE (in this exact order):
+1. "Hyperrealistic cinematic 4K footage, shot on ARRI Alexa 65" + lens + camera movement
+2. "France, 1789." + generic location description (RULE 2)
+3. Crowd composition with 5+ unique individuals (RULES 4, 9)
+4. Costume details with varied colors and materials (RULE 4, 7)
+5. Three-layer composition: foreground, midground, background (RULE 11)
+6. Lighting and atmosphere (RULES 13, 15)
+7. Ground details (RULE 14)
+8. Motion directions — EVERY person moving, camera moving, smoke/flags/fire moving (RULES 12, 16, 17)
+9. Foreground character emotions — restrained historical: determined gaze, furrowed brow, quiet resolve, weathered faces (RULE 18)
+10. End with: "absolutely no text, no signs, no writing, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no modern elements, no film equipment"
 
-This is the MOST IMPORTANT rule. Each visual_prompt string must contain EXACTLY 4080 to 4090 characters (not words — CHARACTERS including spaces). You MUST count. A prompt under 4000 characters is UNACCEPTABLE and means you skipped required departments below. Fill EVERY department with exhaustive detail until you hit exactly 4080-4090 chars.
+SFX PROMPT RULES (for Runway audio generation):
+- Specific atmospheric sounds synced to visuals
+- Example: "massive crowd roaring and chanting in unison, cobblestones under thousands of feet creating rhythmic thunder, distant sporadic musket shots echoing between stone buildings, crackling of large bonfires, iron church bells clanging frantically in the distance, horses neighing, wooden carts creaking"
+- NEVER: music, narration, speech, dialogue
 
-Every visual_prompt MUST begin with: "Hyperrealistic cinematic 4K footage"
-Every visual_prompt MUST end with: "no text, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no close-up faces, no modern elements, aesthetically beautiful cinematography"
+SCENE GUIDELINES:
+- Scene 1: Wide aerial/crane establishing shot descending over generic European street, reveal crowd scale
+- Scene 2: Ground-level dolly/steadicam through contrast — peasant hovel → palace hallway (generic interiors, NO named buildings)
+- Scene 3: Medium-wide tracking shot with crowd surging toward generic stone fortress (NOT "Bastille"), smoke, torches, correct tricolor flags
+- Scene 4: Slow crane pulling back from quiet aftermath — abandoned items, single tricolor flag, empty cobblestone street
 
-Cover ALL 10 departments below IN ORDER. The character counts are MINIMUMS per department:
-
-**DEPT 1 — CAMERA & LENS (250+ chars):**
-Exact camera: "Shot on ARRI Alexa 65 with Panavision C-Series 40mm anamorphic lens at T2.0, 6.5K open-gate." Camera starting position (height, distance, angle). Movement path: direction, speed ("tracking left to right at 0.3 meters per second"), arc, acceleration. End position. Depth of field: what is in focus vs bokeh. Stabilization method (Steadicam, dolly, crane, drone gimbal, handheld).
-
-**DEPT 2 — SETTING & ARCHITECTURE (500+ chars):**
-Exact 18th-century French location type: narrow medieval street, grand boulevard, palace courtyard, market square. Building materials: rough-hewn limestone blocks, exposed timber framing, crumbling plaster over brick, slate rooftops with copper gutters turned green with verdigris. Street surface: uneven cobblestones with gaps filled with mud, central drainage channel. Specific structures: a four-story townhouse with iron juliet balconies, a stone church with a weathered bell tower, a wooden market stall with canvas awning. Distances: street is 6 meters wide, buildings rise 12-15 meters. Props scattered: overturned wooden handcart, broken barrel spilling grain, discarded broadsheets on wet ground, iron street lantern (unlit). Condition: walls stained with soot, moss growing between stones, cracked windowpanes, hanging laundry on lines between buildings.
-
-**DEPT 3 — CROWD COMPOSITION (350+ chars):**
-EXACT number: "approximately 2500 people fill the street stretching 200 meters." Breakdown: 55% working men aged 20-50, 20% women of all ages, 15% elderly men and women, 10% adolescents and children. Every person has a SPECIFIC ACTION VERB — men SURGE forward, women CLUTCH children to their chests, boys SCRAMBLE atop walls for a view, elderly men LEAN on walking sticks and SHAKE fists. Crowd density: packed shoulder-to-shoulder in center, thinning at edges. ALL moving in ONE unified direction — specify which direction. Small clusters: a group of three women PASSING a water jug, two men ARGUING while WALKING, a father HOISTING a child onto his shoulders.
-
-**DEPT 4 — COSTUMES BY CLASS (350+ chars):**
-Working class men: rough undyed linen shirts with rolled sleeves, patched brown woolen breeches held up by leather belts, wooden sabots caked with mud, some wearing grimy leather aprons over shirts, red cotton liberty caps (bonnet rouge) on many heads. Working women: faded linen chemises under heavy grey wool skirts, cotton fichus crossed over chests, hair pinned under plain cotton bonnets, wooden sabots. Children: oversized hand-me-down shirts, barefoot or in rope-soled shoes. Middle class (few): worn but clean wool frock coats in dark blue or brown, cotton stockings, buckled leather shoes, tricorn hats. Fabric conditions: threadbare, sweat-stained, mud-splattered hems, patched elbows, frayed cuffs. Colors: muted earth tones — off-white, grey-brown, faded indigo, dirty cream, with occasional vivid red of liberty caps.
-
-**DEPT 5 — FACES & BODY LANGUAGE (250+ chars):**
-ALL people shown at MEDIUM or WIDE shot distance — waist-up minimum, NO close-ups. Emotional energy conveyed through posture: clenched fists, raised arms, hunched shoulders, wide stances. Men's faces show grim determination, jaw muscles tight, brows furrowed. Women's expressions convey fierce protectiveness, eyes scanning surroundings. General descriptors only: weathered skin, gaunt cheekbones from hunger, sun-darkened complexions. Natural attractive human faces with historically appropriate features, no grotesque or distorted features. Hair: men with natural shoulder-length hair tied with ribbon or tucked under liberty caps — NO modern haircuts.
-
-**DEPT 6 — LIGHTING (350+ chars):**
-Primary source: [specify per scene — dawn sun at 15 degrees above horizon / overcast diffused daylight / golden hour / torchlight]. Direction from camera-left at 45 degrees. Color temperature: [specify 2700K-5600K]. Hard or soft shadows — hard from direct sun, soft from overcast. Fill light from [reflected light off limestone walls / bonfire glow / ambient sky]. Rim light catching edges of smoke and dust particles. Specific effects: god rays piercing through gaps between buildings, torchlight casting warm orange flicker on faces (2700K), wet cobblestones reflecting sky in puddles as silver-blue mirror surfaces. Practical lights: iron lanterns, wooden torches with pitch-soaked rags, candles in windows. Contrast ratio: 6:1 between highlights and shadows.
-
-**DEPT 7 — ATMOSPHERE & PARTICLES (300+ chars):**
-Weather: overcast with occasional breaks in clouds. Smoke: grey-white woodsmoke rising from multiple sources, density medium — obscuring background buildings at 50+ meters, drifting left to right with prevailing wind. Fine dust particles visible in any light beam, golden motes floating. Scattered ash from distant fires, tiny white flecks descending slowly. Ground-level mist in shadows and alleys. Wind from the west at 8 km/h — causing flags to ripple, loose hair to stream, torch flames to bend, canvas awnings to flap. Humidity high: visible perspiration on foreheads, condensation on iron surfaces.
-
-**DEPT 8 — MOTION IN EVERY PART OF FRAME (350+ chars):**
-Camera: [specific movement per scene]. Crowd: entire mass SURGES in unified direction at walking pace. Individual motions: a man WAVES a tricolor flag overhead in wide arcs, a woman PUSHES through the crowd CARRYING a basket, three soldiers MARCH in lockstep, a horse STAMPS and TOSSES its head, a dog WEAVES between legs. Environmental: smoke BILLOWS and CURLS upward, flames from torches LICK and GUTTER in wind, loose papers TUMBLE across cobblestones, a wooden shutter BANGS repeatedly against a wall, laundry on lines SNAPS in gusts, water in gutters RIPPLES from vibration of thousands of feet. Foreground motion differs from background.
-
-**DEPT 9 — COLOR PALETTE (250+ chars):**
-Overall grade: warm amber-golden in highlights, cool blue-grey in shadows, slightly desaturated mids. Dominant shadow color: deep blue-grey with hints of warm brown near firelight. Highlight color: pale golden cream. Key accent colors: vivid red of liberty caps (scarlet-vermillion), deep blue of rare frock coats (navy-indigo), warm orange of torch flames, dirty white of linen shirts. Contrast: high contrast dramatic chiaroscuro with deep blacks and bright highlights. Saturation: 70% — naturalistic but with slight warmth push. Film grain: subtle organic grain as if shot on 35mm celluloid.
-
-**DEPT 10 — FOREGROUND / MIDGROUND / BACKGROUND LAYERS (350+ chars):**
-FOREGROUND (0-3m from camera): slightly soft focus — a shoulder in rough linen entering frame left, the iron tip of a pike cutting across upper right, cobblestones with mud and scattered straw at bottom, a torch held high casting lens flare. MIDGROUND (3-20m): sharpest focus — the main crowd mass, primary character actions, building facades at street level, market stalls, a fountain or monument. BACKGROUND (20m+): progressively softer — rooftop silhouettes against the sky, church spire or palace dome, columns of smoke rising from multiple points, clouds or clear sky with appropriate color gradient. NO empty areas anywhere in the composition — every zone must be filled with detail.
-
-================================================================
-GROK IMAGINE ANTI-HALLUCINATION RULES (include in every prompt):
-================================================================
-- NO close-up faces — Grok distorts them. Waist-up minimum distance
-- NO text, signs with writing, banners with words, shop names — Grok makes gibberish
-- NO modern elements: no glasses, wristwatches, modern clothing, synthetic fabrics, zippers
-- NO symmetrical compositions — use asymmetric, organic, off-center framing
-- NO static poses or frozen tableaux — every person must have a specific ACTION verb
-- NO empty spaces — fill foreground, midground, background completely
-- NO anachronistic hairstyles — no modern cuts, no buzz cuts, no gel
-- CROWD DIRECTION: all people MUST move in ONE unified direction
-- Specify EXACT crowd count: "approximately 2500 people" not just "a crowd"
-- Always include: "aesthetically beautiful cinematography, natural attractive human faces"
-
-================================================================
-SCENE STRUCTURE (French Revolution):
-================================================================
-Scene 1: EPIC AERIAL — Drone/crane descending over revolutionary Paris, massive crowd, smoke, scale
-Scene 2: THE CONTRAST — Tracking through desperate poverty vs aristocratic excess
-Scene 3: THE STORMING — Crowd charging toward the Bastille, peak revolutionary energy
-Scene 4: THE AFTERMATH — Slow pullback, dust settling, emotional weight of transformation
-
-================================================================
-SFX PROMPT RULES:
-================================================================
-- Atmospheric ambient sounds ONLY
-- Be specific: "2000-person crowd murmuring and chanting, distant church bells tolling slowly, horse hooves clattering on cobblestone, wooden cart wheels creaking"
-- NEVER include graphic/violent sounds — use: wind, rain, fire crackling, crowd murmur, bells, footsteps, drums, fabric rustling, wood creaking, thunder
-
-================================================================
-FINAL REMINDER — READ THIS CAREFULLY:
-================================================================
-1. EXACTLY {scene_count} scenes
-2. Each visual_prompt = EXACTLY 4080-4090 characters. Count carefully. This is the MOST CRITICAL requirement.
-3. Begin each: "Hyperrealistic cinematic 4K footage"
-4. End each: "no text, no letters, no words, no subtitles, no watermarks, no UI elements, no logos, no close-up faces, no modern elements, aesthetically beautiful cinematography"
-5. Cover ALL 10 departments in order with the minimum character counts specified
-6. If a prompt is under 4000 characters, you MUST expand it — add more architectural detail, more crowd actions, more atmospheric particles, more color description
-
-OUTPUT: Return ONLY a valid JSON array. No markdown code blocks, no commentary.
+OUTPUT: Return ONLY a valid JSON array, no markdown.
 
 [
   {{
     "scene_number": 1,
     "narration": "narration text",
-    "visual_prompt": "EXACTLY 4080-4090 characters of ultra-detailed cinematic description covering all 10 departments",
+    "visual_prompt": "3500-3900 chars following all 18 rules — constant motion, restrained historical emotions, no famous buildings",
     "camera": "camera movement",
     "lighting": "lighting setup",
     "mood": "emotional mood",
-    "sfx_prompt": "atmospheric sounds",
+    "sfx_prompt": "detailed atmospheric sounds for Runway",
     "duration_sec": {scene_duration}
   }}
 ]"""
