@@ -154,97 +154,56 @@ OUTPUT: Return ONLY a valid JSON array, no markdown.
 # with year-anchored rules embedded directly in the system prompt.
 # ===================================================================
 
-SCENE_PROMPT_ENHANCED = """You are a cinematic director writing ULTRA-DETAILED visual prompts for Grok Imagine V2 video generation.
+SCENE_PROMPT_ENHANCED = """You are an animation director writing visual prompts for Grok Imagine V2 video generation.
 
-YEAR: {year}. LOCATION: {location}.
+VISUAL STYLE — MANDATORY FOR ALL SCENES:
+2D hand-drawn animation. Quality reference: Arcane (Netflix), Klaus (Netflix), Spider-Man Into the Spider-Verse.
+Painterly illustrated backgrounds. Bold ink outlines on characters. Rich saturated colors.
+Expressive stylized faces. Visible brushstroke texture. Cinematic animated film look.
+NOT photorealistic. NOT 3D CGI. NOT live action.
 
-ABSOLUTE REQUIREMENT: Each visual_prompt MUST be EXACTLY 4080-4090 characters. Count precisely after writing. If under 4000 characters — ADD MORE DETAIL until you reach 4080+. This is NON-NEGOTIABLE. Short prompts produce generic video. Every extra character of description = better visual output.
+TOPIC: {topic}
+SCRIPT: {script_summary}
 
-You are generating 4 scenes for a {duration}-second documentary about: {topic}
+Generate exactly 4 scenes for a 30-second animated film about the French Revolution 1789.
 
-SCRIPT CONTEXT:
-{script_summary}
+SCENE STRUCTURE:
+Scene 1 (0:00-0:08) — Wide aerial establishing shot over animated Paris rooftops
+Scene 2 (0:08-0:16) — Ground level crowd of revolutionaries, expressive faces, determined mood
+Scene 3 (0:16-0:24) — The storming — kinetic crowd surging forward, maximum energy
+Scene 4 (0:24-0:32) — Emotional aftermath, quiet reflection, warm golden light
 
-HISTORICAL ACCURACY RULES FOR {year} {location}:
-- YEAR ANCHOR: Every visual element must be labeled with the year. Example: "{year}-era limestone buildings" not just "buildings"
-- FLAG PROHIBITION — ZERO TOLERANCE:
-  NO crosses of any kind on any flag (no St George, no Maltese, no red cross, no white cross).
-  FRANCE 1789: ONLY plain WHITE rectangular fabric on wooden pole. NO symbols. NO pattern. Just solid white.
-  Tricolor did NOT exist in 1789 (introduced Sept 1790) — ZERO tricolor flags.
-  Empty sky is better than wrong flag.
-  Additional context: {flag_rule}
-- CLOTHING: {clothing_rule}
-- OBJECTS: {objects_rule}
-- ARCHITECTURE: {architecture_rule}
+FOR EACH SCENE WRITE A PROMPT OF 800-1200 CHARACTERS that covers:
+1. Style declaration: "2D animation, Arcane quality, hand-drawn, painterly"
+2. Camera movement: slow pan / crane / steadicam / dolly
+3. Setting: illustrated 18th century Paris — cobblestone streets, limestone buildings, no modern elements
+4. Characters: number, poses, movement direction, clothing silhouettes (period-accurate shapes)
+5. Color palette: 3-4 specific colors that define this scene's mood
+6. Lighting: stylized, dramatic — warm/cool contrast, colored shadows
+7. Mood and atmosphere
 
-GROK IMAGINE V2 — KNOWN ISSUES TO PREVENT:
-- NO close-up faces — Grok distorts facial features at close range. All people at MEDIUM or WIDE shot (waist-up minimum, full body preferred)
-- NO text, signs, banners with writing, shop names, newspapers — Grok generates illegible gibberish text
-- NO modern elements — Grok inserts modern clothing, glasses, wristwatches, sneakers if not explicitly forbidden
-- NO symmetrical compositions — Grok defaults to artificial symmetry. Always specify: asymmetric, organic, offset framing
-- NO static poses — Grok defaults to frozen tableaux. Every single person must have a specific ACTION VERB (running, pushing, pointing, carrying, stumbling)
-- NO empty spaces — fill every layer: foreground crowd + midground action + background architecture/sky/smoke
-- NO anachronistic hairstyles — specify: men have natural hair tied with ribbon, cotton liberty caps, or tricorn hats. NOT modern undercuts or fades
-- CROWD DIRECTION: All people must move in ONE unified direction. Say: "entire crowd surges LEFT TO RIGHT toward the fortress" — Grok defaults to random wandering
-- EXACT NUMBERS: "approximately 3000 people fill the cobblestone street" not "a large crowd"
-- BEAUTY RULE: always append "aesthetically beautiful cinematography, natural attractive human faces, no grotesque or distorted features, photorealistic skin textures"
-- TORCHES ONLY AT NIGHT. Daytime scenes (morning/afternoon): crowd carries pitchforks, pikes, wooden clubs, farming tools — ZERO torches. Storming of Bastille = daytime = no torches. Specify TIME OF DAY for each scene explicitly.
+STRICT RULES:
+- Begin every visual_prompt with: "2D hand-drawn animation, Arcane Netflix style, painterly backgrounds,"
+- Every person is IN MOTION — specific action verb for each character
+- Crowd moves in ONE unified direction
+- No text or signs visible anywhere
+- No photorealistic skin, no 3D shading, no CGI look
+- Keep prompts 800-1200 characters — concise and style-focused
 
-FOR EACH SCENE — DESCRIBE ALL OF THESE DEPARTMENTS (this is why prompts must be 4080+ chars):
-
-**CAMERA & LENS**: Exact movement (steadicam/crane/drone/dolly/handheld), speed (slow/medium/fast), direction (left-to-right/descending/pushing in), focal length (24mm/35mm/50mm), aperture (f/1.8/f/2.8/f/5.6), depth of field (shallow/deep), any special effects (lens flare, dust on lens)
-
-**SETTING & ARCHITECTURE ({year})**: Building materials (limestone/timber/brick), street width in meters, building height in stories, specific architectural details (mansard roofs/Gothic arches/wrought iron), what year these structures were built, what is NOT present (no Eiffel Tower, no Haussmann boulevards, no gas lamps if pre-1820), ground surface (wet cobblestones/mud/packed earth), debris and environmental detail
-
-**CROWD COMPOSITION**: Exact percentage breakdown (e.g., "60% working-class men, 25% women, 10% children, 5% bourgeoisie"), what each group is carrying (pitchforks/pikes/bread/muskets/wooden clubs — torches ONLY if nighttime), their movement direction and speed
-
-**COSTUMES ({year} — historically accurate)**: Fabric type for each social class (rough linen/wool/silk), specific garments (culottes/chemise/sabots/tricorn), colors (muted ochres/dark browns/dirty whites), condition (worn/torn/dirty), footwear, headwear, accessories. FORBIDDEN: zippers, elastic, synthetic fabrics, rubber soles, modern cuts
-
-**FACES & EXPRESSIONS**: Shot distance rule (no closer than waist-up), emotion descriptors (determined/desperate/furious/fearful), age distribution, natural beauty standard, no grotesque or distorted features
-
-**LIGHTING**: Primary source (late afternoon sun/torchlight/overcast sky), direction (raking from left/backlit/overhead), color temperature in Kelvin (2700K torchlight/5500K daylight/7000K overcast), shadow hardness (hard-edged/soft/diffuse), any secondary sources (reflected light from water/windows)
-
-**ATMOSPHERE & WEATHER**: Season, temperature suggestion, wind direction and strength, particles in air (smoke density/dust/fog/rain), visibility distance in meters, smell suggestion (smoke/gunpowder/sweat/mud) for mood reference
-
-**MOTION LAYERS**: Camera movement speed and direction, crowd movement direction and speed, individual hero actions (woman in foreground pushes cart LEFT, man in midground raises pike RIGHT, child in background runs AWAY), environmental motion (dust rising, smoke drifting, birds startling)
-
-**COLOR PALETTE**: Primary colors (desaturated ochre/dark charcoal/blood red), secondary colors (dirty white/rust/deep shadow), specific hex-level description if helpful, overall grade (warm golden hour/cold grey overcast/high-contrast torchlight)
-
-**DEPTH LAYERS**:
-- FOREGROUND (0-3m): Specific individuals, their exact actions, costumes, expressions
-- MIDGROUND (3-15m): Main crowd action, key visual element, architecture fragment
-- BACKGROUND (15m+): Full architectural context, sky, smoke, scale reference
-
-Generate exactly 4 scenes following this structure:
-
-SCENE 1 (0:00-0:08) — EPIC AERIAL ESTABLISHING SHOT
-Drone descending from 200m altitude down to 15m above the crowd. DAYTIME — bright midday sun. We see revolutionary {location} from above — the density of {year}-era streets, dust and haze rising from the streets. As drone descends, we begin to see individual faces, raised fists, pitchforks, and pikes. NO torches (it is daytime). Camera movement: slow vertical descent combined with slight northward drift.
-
-SCENE 2 (0:08-0:16) — THE HUMAN COST
-Ground level steadicam moving through the crowd. We see the faces of the revolution — exhausted mothers, young men with hollow cheeks, elderly citizens who have waited decades. Contrast of desperate poverty against ornate {year} architecture. The camera weaves between individuals, each with their own story.
-
-SCENE 3 (0:16-0:24) — THE STORMING ACTION
-The crowd surges toward its target. DAYTIME — afternoon sun. Maximum kinetic energy. Tracking shot moving LEFT TO RIGHT with the crowd. Pitchforks, pikes, wooden clubs, farming tools raised (NO torches — it is daytime). Determined faces (at distance), weapons raised. This is the moment of historical rupture.
-
-SCENE 4 (0:24-0:32) — THE AFTERMATH / RESOLUTION
-Slow crane pulling back and upward. The immediate aftermath — some jubilation, some shock, some grief. The camera rises to show the scale of what has happened — thousands of people, changed forever. Emotional, quiet, monumental.
-
-OUTPUT FORMAT — return valid JSON:
+OUTPUT as valid JSON:
 {{
   "scenes": [
     {{
       "scene_number": 1,
       "time_start": "0:00",
       "time_end": "0:08",
-      "visual_prompt": "EXACTLY 4080-4090 CHARS HERE — count after writing",
-      "narration": "What the narrator says during this scene (2-3 sentences)",
-      "mood": "epic/tense/dramatic/somber",
-      "camera": "specific camera movement description"
+      "visual_prompt": "800-1200 chars, starts with style declaration",
+      "narration": "2-3 sentence narrator line",
+      "mood": "epic/determined/kinetic/reflective",
+      "camera": "camera movement"
     }}
   ]
 }}
-
-CRITICAL: After writing each visual_prompt — count the characters. If under 4080 — add more detail to COSTUMES, ATMOSPHERE, or CROWD COMPOSITION sections until you reach 4080-4090. Do not truncate. Do not summarize. More detail = better video.
 """
 
 
